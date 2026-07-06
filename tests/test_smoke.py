@@ -366,6 +366,18 @@ class DiffusionSmokeTests(unittest.TestCase):
                 self.assertNotIn(signature, seen, f"duplicates {seen.get(signature)}")
             seen[signature] = path
 
+    def test_formal_experiment_configs_use_full_training(self):
+        smoke_config = "latent_conv_autoencoder_smoke.yaml"
+        for path in Path("configs").glob("*.yaml"):
+            config = load_config(path)
+            training_cfg = config.get("training", {})
+            with self.subTest(config=str(path)):
+                if path.name == smoke_config:
+                    self.assertEqual(training_cfg.get("epochs"), 1)
+                else:
+                    self.assertEqual(training_cfg.get("epochs"), 100)
+                    self.assertEqual(training_cfg.get("save_every"), 5)
+
     def test_resolve_device_auto(self):
         self.assertIn(resolve_device("auto").type, {"cpu", "cuda"})
         self.assertIn(resolve_device(None).type, {"cpu", "cuda"})

@@ -1,8 +1,8 @@
 # Experiment Matrix
 
-The repository now includes a compact experiment matrix that covers every
-implemented diffusion component at least once without expanding into a full
-combinatorial grid.
+The repository includes a compact experiment matrix that covers the main
+diffusion components without expanding into a full combinatorial grid. Formal
+experiments use the full CIFAR10 training split for 100 epochs.
 
 ## Configured Experiments
 
@@ -17,7 +17,6 @@ combinatorial grid.
 | `configs/cifar10_unet_cosine.yaml` | Pixel | UNet | Cosine | epsilon | min-SNR | DDIM | CFG class | Stronger pixel UNet setup. |
 | `configs/cifar10_unet_snr_cosine.yaml` | Pixel | UNet | Cosine | epsilon | SNR | DDIM | CFG class | SNR weighting coverage. |
 | `configs/latent_unet_ddim.yaml` | Latent | UNet | Cosine | v | min-SNR | DDIM | CFG class | Pretrained VAE latent diffusion. |
-| `configs/latent_conv_autoencoder_smoke.yaml` | Latent | UNet | Cosine | v | min-SNR | DDIM | CFG class | Built-in conv autoencoder pipeline smoke. |
 
 ## What Is Covered
 
@@ -26,14 +25,17 @@ combinatorial grid.
 - Samplers: `DDPM`, `DDIM`
 - Backbones: `MLP`, `UNet`, `Transformer`, `DiT`
 - Loss weighting: none, `snr`, `min_snr`
-- Representations: pixel, pretrained VAE latent, built-in conv-autoencoder latent
+- Representations: pixel, pretrained VAE latent
 - Conditioning: every experiment trains with classifier-free class conditioning
 
-`latent_conv_autoencoder_smoke.yaml` is intentionally marked as a smoke config:
+## Smoke-Only Config
+
+`configs/latent_conv_autoencoder_smoke.yaml` is intentionally kept as a smoke
+config:
 its autoencoder is randomly initialized and frozen, so it checks that the code
-path works but is not expected to produce meaningful samples. Meaningful latent
-diffusion results should use `latent_unet_ddim.yaml` with the downloaded
-Diffusers VAE.
+path works but is not expected to produce meaningful samples. It is not part of
+the full experiment runner. Meaningful latent diffusion results should use
+`latent_unet_ddim.yaml` with the downloaded Diffusers VAE.
 
 The full experiment runner saves two sample grids for every checkpoint:
 unconditional samples with the learned null label and guided class-conditional

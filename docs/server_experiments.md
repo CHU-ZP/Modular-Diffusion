@@ -164,7 +164,7 @@ PY
 
 ## 6. Full Runs
 
-To run all configured experiments on physical CUDA devices 1 and 2, with one
+To run all formal experiments on physical CUDA devices 1 and 2, with one
 training process per GPU at a time:
 
 ```bash
@@ -179,7 +179,6 @@ CUDA 1:
   cifar10_transformer_ddpm
   cifar10_unet_x0_ddpm
   cifar10_unet_cosine
-  latent_conv_autoencoder_smoke
 
 CUDA 2:
   cifar10_unet_ddpm
@@ -189,8 +188,8 @@ CUDA 2:
   latent_unet_ddim
 ```
 
-It also prepares CIFAR10, downloads the VAE if needed, trains each config, and
-samples the final checkpoint twice into `outputs/final/`:
+It also prepares CIFAR10, downloads the VAE if needed, trains each formal config
+for 100 epochs, and samples the final checkpoint twice into `outputs/final/`:
 
 ```text
 ${experiment}.uncond.png
@@ -233,6 +232,11 @@ Latent baseline:
 
 ```bash
 uv run python -m diffusion.train --config configs/latent_unet_ddim.yaml --device auto --output-dir runs
+```
+
+The built-in conv autoencoder config remains available only as a smoke check:
+
+```bash
 uv run python -m diffusion.train --config configs/latent_conv_autoencoder_smoke.yaml --device auto --output-dir runs
 ```
 

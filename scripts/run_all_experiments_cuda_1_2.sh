@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run all CFG-enabled CIFAR10 experiments on physical CUDA devices 1 and 2.
+# Run all full CFG-enabled CIFAR10 experiments on physical CUDA devices 1 and 2.
 # Each GPU runs one queue sequentially, so a single GPU never hosts more than
 # one training process from this script at the same time. Every final checkpoint
 # is sampled once unconditionally and once with class guidance.
@@ -20,7 +20,6 @@ QUEUE_GPU_1=(
   "configs/cifar10_transformer_ddpm.yaml"
   "configs/cifar10_unet_x0_ddpm.yaml"
   "configs/cifar10_unet_cosine.yaml"
-  "configs/latent_conv_autoencoder_smoke.yaml"
 )
 
 QUEUE_GPU_2=(
