@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Composable diffusion research playground"
 requires-python = ">=3.10"
 dependencies = [
+  "datasets",
   "diffusers",
   "safetensors",
   "torch",

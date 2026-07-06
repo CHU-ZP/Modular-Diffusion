@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 import torch
+from PIL import Image
 from torch import nn
 
 from diffusion.builders import (
@@ -13,6 +14,10 @@ from diffusion.builders import (
     build_representation,
     build_sampler,
     build_schedule,
+)
+from diffusion.data.cifar10 import (
+    HuggingFaceCIFAR10Dataset,
+    build_cifar10_dataloader,
 )
 from diffusion.devices import resolve_device
 from diffusion.parameterizations import DiffusionParameterization
@@ -205,6 +210,7 @@ class DiffusionSmokeTests(unittest.TestCase):
         config = {
             "data": {
                 "type": "cifar10",
+                "source": "huggingface",
                 "root": "./data",
                 "image_shape": [3, 32, 32],
                 "num_classes": 10,
@@ -215,10 +221,43 @@ class DiffusionSmokeTests(unittest.TestCase):
         with patch("diffusion.train.build_cifar10_dataloader") as build_loader:
             build_dataloader(config)
         build_loader.assert_called_once_with(
+            source="huggingface",
             root="./data",
             batch_size=4,
             num_workers=0,
         )
+
+    def test_huggingface_cifar10_matches_training_interface(self):
+        fake_records = [
+            {"img": Image.new("RGB", (32, 32), color=(128, 64, 32)), "label": 7},
+        ]
+        with patch("diffusion.data.cifar10._load_huggingface_split") as load_split:
+            load_split.return_value = fake_records
+            dataset = HuggingFaceCIFAR10Dataset(root="./data", train=True)
+        image, label = dataset[0]
+        self.assertEqual(image.shape, (3, 32, 32))
+        self.assertEqual(label, 7)
+        self.assertGreaterEqual(float(image.min()), -1.0)
+        self.assertLessEqual(float(image.max()), 1.0)
+
+    def test_huggingface_cifar10_dataloader_batches(self):
+        fake_records = [
+            {"img": Image.new("RGB", (32, 32), color=(0, 0, 0)), "label": 0},
+            {"img": Image.new("RGB", (32, 32), color=(255, 255, 255)), "label": 1},
+        ]
+        with patch("diffusion.data.cifar10._load_huggingface_split") as load_split:
+            load_split.return_value = fake_records
+            loader = build_cifar10_dataloader(
+                batch_size=2,
+                num_workers=0,
+                shuffle=False,
+                pin_memory=False,
+            )
+            images, labels = next(iter(loader))
+        self.assertEqual(images.shape, (2, 3, 32, 32))
+        self.assertEqual(labels.tolist(), [0, 1])
+        self.assertTrue(torch.isclose(images[0].min(), torch.tensor(-1.0)))
+        self.assertTrue(torch.isclose(images[1].max(), torch.tensor(1.0)))
 
     def test_resolve_device_auto(self):
         self.assertIn(resolve_device("auto").type, {"cpu", "cuda"})

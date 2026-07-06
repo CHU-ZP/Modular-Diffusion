@@ -49,9 +49,13 @@ PY
 
 prepare_cifar10() {
   uv run python - <<'PY'
-from torchvision import datasets
+from diffusion.builders import load_config
+from diffusion.train import build_dataloader
 
-datasets.CIFAR10(root="./data", train=True, download=True)
+config = load_config("configs/cifar10_mlp_ddpm.yaml")
+config["data"]["batch_size"] = 1
+config["data"]["num_workers"] = 0
+next(iter(build_dataloader(config)))
 print("CIFAR10 is ready")
 PY
 }

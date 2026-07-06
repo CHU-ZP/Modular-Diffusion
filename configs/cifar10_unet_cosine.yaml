@@ -2,6 +2,7 @@ experiment_name: cifar10_unet_cosine
 
 data:
   type: cifar10
+  source: huggingface
   root: ./data
   image_shape: [3, 32, 32]
   batch_size: 128

@@ -40,7 +40,29 @@ uv run python -m diffusion.download_vae \
 The latent config loads this directory with `local_files_only: true`, so training
 and sampling do not need network access after the download succeeds.
 
-## 3. Smoke Checks
+## 3. CIFAR10 Data Source
+
+CIFAR10 is loaded through Hugging Face `datasets` by default:
+
+```yaml
+data:
+  type: cifar10
+  source: huggingface
+```
+
+The adapter keeps the same training interface as torchvision CIFAR10:
+
+```text
+DataLoader batch -> (images, labels)
+images shape     -> [batch, 3, 32, 32]
+images range     -> [-1, 1]
+labels shape     -> [batch]
+```
+
+The cache is stored under `./data/huggingface` unless `hf_cache_dir` is set in
+the config.
+
+## 4. Smoke Checks
 
 ```bash
 uv run python -m unittest discover -s tests
@@ -61,7 +83,7 @@ uv run python -m diffusion.sample \
 These images are generated from untrained denoisers. They only validate the
 pipeline.
 
-## 4. Small-Run Training
+## 5. Small-Run Training
 
 Before long runs, reduce a config in a temporary script and train a few batches:
 
@@ -123,7 +145,7 @@ save_image(images, "outputs/small_run/latent_unet_small.png", normalize=True, va
 PY
 ```
 
-## 5. Full Runs
+## 6. Full Runs
 
 To run all configured experiments on physical CUDA devices 1 and 2, with one
 training process per GPU at a time:
