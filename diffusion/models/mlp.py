@@ -1,4 +1,4 @@
-"""MLP denoiser for MNIST and toy data."""
+"""MLP denoiser for image and toy tensors."""
 
 from __future__ import annotations
 

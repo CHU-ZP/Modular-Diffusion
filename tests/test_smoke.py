@@ -1,9 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 import torch
 from torch import nn
 
 from diffusion.builders import (
+    build_autoencoder,
     build_loss,
     build_model,
     build_parameterization,
@@ -171,6 +173,32 @@ class DiffusionSmokeTests(unittest.TestCase):
         self.assertEqual(clean.shape, (2, 4, 8, 8))
         self.assertEqual(decoded.shape, image.shape)
         self.assertTrue(torch.isfinite(decoded).all())
+
+    def test_diffusers_autoencoder_config_uses_loader(self):
+        config = {
+            "representation": {
+                "type": "latent",
+                "autoencoder": {
+                    "type": "diffusers_autoencoder_kl",
+                    "pretrained_model_name_or_path": "checkpoints/vae/sd-vae-ft-mse",
+                    "torch_dtype": "float32",
+                    "local_files_only": True,
+                },
+            },
+        }
+        with patch("diffusion.builders.load_diffusers_autoencoder_kl") as loader:
+            loader.return_value = TinyAutoencoder()
+            autoencoder = build_autoencoder(config)
+        self.assertIsInstance(autoencoder, TinyAutoencoder)
+        loader.assert_called_once_with(
+            "checkpoints/vae/sd-vae-ft-mse",
+            subfolder=None,
+            revision=None,
+            variant=None,
+            torch_dtype="float32",
+            local_files_only=True,
+            cache_dir=None,
+        )
 
     def test_resolve_device_auto(self):
         self.assertIn(resolve_device("auto").type, {"cpu", "cuda"})

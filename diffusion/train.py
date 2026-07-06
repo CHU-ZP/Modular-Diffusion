@@ -17,18 +17,16 @@ from .builders import (
     build_schedule,
     load_config,
 )
-from .data import build_cifar10_dataloader, build_mnist_dataloader
+from .data import build_cifar10_dataloader
 from .devices import resolve_device
 
 
 def build_dataloader(config: dict) -> torch.utils.data.DataLoader:
     data_cfg = dict(config.get("data", {}))
-    dataset = data_cfg.pop("type", "mnist").lower()
-    if dataset == "mnist":
-        return build_mnist_dataloader(**data_cfg)
+    dataset = data_cfg.pop("type", "cifar10").lower()
     if dataset == "cifar10":
         return build_cifar10_dataloader(**data_cfg)
-    raise ValueError(f"unknown dataset: {dataset}")
+    raise ValueError(f"unknown dataset: {dataset}; this repository uses cifar10 only")
 
 
 def main() -> None:

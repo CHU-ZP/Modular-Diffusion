@@ -16,6 +16,7 @@ from .models import (
     MLPDenoiser,
     TransformerDenoiser,
     UNetDenoiser,
+    load_diffusers_autoencoder_kl,
 )
 from .parameterizations import DiffusionParameterization
 from .processes import DiffusionProcess
@@ -104,6 +105,25 @@ def build_autoencoder(config: dict[str, Any]) -> nn.Module:
     autoencoder_type = cfg.pop("type", "conv").lower()
     checkpoint_path = cfg.pop("checkpoint", None)
     state_dict_key = cfg.pop("state_dict_key", None)
+
+    if autoencoder_type in {"diffusers_autoencoder_kl", "autoencoder_kl"}:
+        pretrained_model_name_or_path = cfg.pop(
+            "pretrained_model_name_or_path",
+            checkpoint_path,
+        )
+        if pretrained_model_name_or_path is None:
+            raise ValueError(
+                "diffusers_autoencoder_kl requires pretrained_model_name_or_path",
+            )
+        return load_diffusers_autoencoder_kl(
+            pretrained_model_name_or_path,
+            subfolder=cfg.pop("subfolder", None),
+            revision=cfg.pop("revision", None),
+            variant=cfg.pop("variant", None),
+            torch_dtype=cfg.pop("torch_dtype", None),
+            local_files_only=bool(cfg.pop("local_files_only", False)),
+            cache_dir=cfg.pop("cache_dir", None),
+        )
 
     if autoencoder_type != "conv":
         raise ValueError(f"unknown autoencoder type: {autoencoder_type}")
