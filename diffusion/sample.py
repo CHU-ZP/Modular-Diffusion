@@ -17,7 +17,32 @@ from .builders import (
     build_schedule,
     load_config,
 )
+from .conditioning import class_labels_to_condition
 from .devices import resolve_device
+
+
+def _sampling_class_labels(args: argparse.Namespace, config: dict, batch_size: int, device: torch.device) -> torch.Tensor | None:
+    class_label = getattr(args, "class_label", None)
+    class_labels = getattr(args, "class_labels", None)
+    if getattr(args, "unconditional", False):
+        if class_label is not None or class_labels is not None:
+            raise ValueError("--unconditional cannot be combined with class labels")
+        return None
+
+    if config.get("conditioning", {}).get("type") != "class":
+        if class_label is not None or class_labels is not None:
+            raise ValueError("class labels require `conditioning.type: class` in the config")
+        return None
+
+    sampling_cfg = config.get("sampling", {})
+    labels = class_labels
+    if labels is None and class_label is not None:
+        labels = class_label
+    if labels is None:
+        labels = sampling_cfg.get("class_labels", sampling_cfg.get("class_label"))
+    if labels is None:
+        return None
+    return class_labels_to_condition(labels, batch_size=batch_size, device=device)
 
 
 def main() -> None:
@@ -27,6 +52,23 @@ def main() -> None:
     parser.add_argument("--device", default=None, help="cpu, cuda, or auto")
     parser.add_argument("--output", default="samples.png", help="Output image grid")
     parser.add_argument("--batch-size", type=int, default=None)
+    parser.add_argument(
+        "--unconditional",
+        action="store_true",
+        help="Force null conditioning for CFG-trained class-conditional configs.",
+    )
+    parser.add_argument("--class-label", type=int, default=None, help="Single CIFAR10 class label")
+    parser.add_argument(
+        "--class-labels",
+        default=None,
+        help="Comma-separated class labels, repeated to fill the batch",
+    )
+    parser.add_argument(
+        "--guidance-scale",
+        type=float,
+        default=None,
+        help="Classifier-free guidance scale. 1.0 uses the conditional prediction directly.",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -48,8 +90,20 @@ def main() -> None:
     shape = tuple(sampling_cfg.get("shape", [batch_size, *config.get("data", {}).get("image_shape", [1, 28, 28])]))
     if shape[0] != batch_size:
         shape = (batch_size, *shape[1:])
+    condition = _sampling_class_labels(args, config, batch_size, device)
+    guidance_scale = (
+        float(args.guidance_scale)
+        if args.guidance_scale is not None
+        else float(sampling_cfg.get("guidance_scale", 1.0))
+    )
 
-    samples = sampler.sample(model, shape=shape, device=device)
+    samples = sampler.sample(
+        model,
+        shape=shape,
+        condition=condition,
+        guidance_scale=guidance_scale,
+        device=device,
+    )
     images = representation.decode(samples).clamp(-1.0, 1.0)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)

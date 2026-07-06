@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run all configured CIFAR10 experiments on physical CUDA devices 1 and 2.
+# Run all CFG-enabled CIFAR10 experiments on physical CUDA devices 1 and 2.
 # Each GPU runs one queue sequentially, so a single GPU never hosts more than
-# one training process from this script at the same time.
+# one training process from this script at the same time. Every final checkpoint
+# is sampled once unconditionally and once with class guidance.
 
 GPU_1="${GPU_1:-1}"
 GPU_2="${GPU_2:-2}"
@@ -11,6 +12,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-runs}"
 LOG_DIR="${LOG_DIR:-logs/full_runs}"
 SAMPLE_DIR="${SAMPLE_DIR:-outputs/final}"
 VAE_DIR="${VAE_DIR:-checkpoints/vae/sd-vae-ft-mse}"
+CFG_CLASS_LABELS="${CFG_CLASS_LABELS:-0,1,2,3,4,5,6,7,8,9}"
+CFG_GUIDANCE_SCALE="${CFG_GUIDANCE_SCALE:-3.0}"
 
 QUEUE_GPU_1=(
   "configs/cifar10_mlp_ddpm.yaml"
@@ -92,13 +95,24 @@ train_and_sample() {
     --output-dir "${OUTPUT_DIR}" \
     2>&1 | tee "${LOG_DIR}/${experiment}.train.log"
 
-  echo "[gpu ${gpu}] sampling ${experiment} from ${checkpoint}"
+  echo "[gpu ${gpu}] sampling ${experiment} unconditionally from ${checkpoint}"
   CUDA_VISIBLE_DEVICES="${gpu}" uv run python -m diffusion.sample \
     --config "${config}" \
     --checkpoint "${checkpoint}" \
     --device cuda \
-    --output "${SAMPLE_DIR}/${experiment}.png" \
-    2>&1 | tee "${LOG_DIR}/${experiment}.sample.log"
+    --unconditional \
+    --output "${SAMPLE_DIR}/${experiment}.uncond.png" \
+    2>&1 | tee "${LOG_DIR}/${experiment}.sample.uncond.log"
+
+  echo "[gpu ${gpu}] sampling ${experiment} conditionally from ${checkpoint}"
+  CUDA_VISIBLE_DEVICES="${gpu}" uv run python -m diffusion.sample \
+    --config "${config}" \
+    --checkpoint "${checkpoint}" \
+    --device cuda \
+    --class-labels "${CFG_CLASS_LABELS}" \
+    --guidance-scale "${CFG_GUIDANCE_SCALE}" \
+    --output "${SAMPLE_DIR}/${experiment}.cond.png" \
+    2>&1 | tee "${LOG_DIR}/${experiment}.sample.cond.log"
 }
 
 run_queue() {
@@ -125,4 +139,4 @@ wait "${pid_2}"
 
 echo "All experiments finished."
 echo "Logs: ${LOG_DIR}"
-echo "Samples: ${SAMPLE_DIR}"
+echo "Samples: ${SAMPLE_DIR} (*.uncond.png and *.cond.png)"

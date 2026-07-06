@@ -293,7 +293,10 @@ noise x_T
   -> image
 ```
 
-The main experiments are CIFAR10-only:
+The main experiments are CIFAR10-only, and every config trains with
+classifier-free class conditioning. This means each trained checkpoint can be
+sampled with the learned null condition or with CIFAR10 labels and a guidance
+scale:
 
 - `configs/cifar10_mlp_ddpm.yaml` tests a simple MLP denoiser in pixel space.
 - `configs/cifar10_unet_ddpm.yaml` tests a UNet with the original DDPM-style

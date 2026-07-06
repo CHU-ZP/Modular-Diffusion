@@ -233,8 +233,10 @@ VAE produces latents of shape `4x4x4`, so the latent diffusion sampler uses
 
 ## CIFAR10 Experiments In This Repository
 
-The repository is CIFAR10-only at the data layer. Current experiment configs
-cover:
+The repository is CIFAR10-only at the data layer, and every experiment config
+trains with CIFAR10 class conditioning plus classifier-free dropout. The same
+checkpoint can therefore be sampled both unconditionally and with class
+guidance. Representative configs include:
 
 - `configs/cifar10_mlp_ddpm.yaml`: pixel-space MLP baseline with linear schedule
   and DDPM sampling.

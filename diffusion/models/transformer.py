@@ -7,6 +7,7 @@ from typing import Sequence
 import torch
 from torch import Tensor, nn
 
+from .conditioning import ClassConditionEmbedding
 from .mlp import SinusoidalTimeEmbedding
 
 
@@ -47,7 +48,9 @@ class TransformerDenoiser(nn.Module):
             nn.SiLU(),
             nn.Linear(embed_dim, embed_dim),
         )
-        self.class_embedding = nn.Embedding(num_classes, embed_dim) if num_classes is not None else None
+        self.class_embedding = (
+            ClassConditionEmbedding(num_classes, embed_dim) if num_classes is not None else None
+        )
 
         layer = nn.TransformerEncoderLayer(
             d_model=embed_dim,
@@ -65,8 +68,8 @@ class TransformerDenoiser(nn.Module):
         tokens = self.patch_embed(x_t).flatten(2).transpose(1, 2)
         tokens = tokens + self.position_embedding
         context = self.time_embedding(timesteps).unsqueeze(1)
-        if self.class_embedding is not None and condition is not None:
-            context = context + self.class_embedding(condition.long().view(batch_size)).unsqueeze(1)
+        if self.class_embedding is not None:
+            context = context + self.class_embedding(condition, batch_size, x_t.device).unsqueeze(1)
         tokens = self.encoder(tokens + context)
         patches = self.to_patch(tokens)
         return self._unpatchify(patches)

@@ -72,12 +72,14 @@ uv run python -m diffusion.sample \
   --config configs/cifar10_mlp_ddpm.yaml \
   --device auto \
   --batch-size 4 \
+  --unconditional \
   --output outputs/smoke/cifar10_mlp_untrained.png
 
 uv run python -m diffusion.sample \
   --config configs/latent_unet_ddim.yaml \
   --device auto \
   --batch-size 4 \
+  --unconditional \
   --output outputs/smoke/latent_unet_untrained.png
 ```
 
@@ -106,6 +108,7 @@ from diffusion.builders import (
     build_schedule,
     load_config,
 )
+from diffusion.conditioning import apply_classifier_free_dropout, class_labels_to_condition
 from diffusion.devices import resolve_device
 from diffusion.train import build_dataloader
 
@@ -124,11 +127,13 @@ model = build_model(config).to(device)
 loss_fn = build_loss(config, process, parameterization)
 optimizer = build_optimizer(config, model)
 loader = build_dataloader(config)
+condition_dropout = float(config.get("conditioning", {}).get("dropout_prob", 0.0))
 
 model.train()
-for step, (images, _) in zip(range(5), loader):
+for step, (images, labels) in zip(range(5), loader):
     clean = representation.encode(images.to(device))
-    loss = loss_fn(model, clean)
+    labels = apply_classifier_free_dropout(labels.to(device), condition_dropout)
+    loss = loss_fn(model, clean, condition=labels)
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
@@ -140,9 +145,20 @@ torch.save({"model": model.state_dict(), "config": config}, "runs/small_run/late
 
 model.eval()
 sampler = build_sampler(config, process, parameterization)
-samples = sampler.sample(model, shape=(4, 4, 4, 4), device=device)
-images = representation.decode(samples).clamp(-1, 1)
-save_image(images, "outputs/small_run/latent_unet_small.png", normalize=True, value_range=(-1, 1))
+uncond_samples = sampler.sample(model, shape=(4, 4, 4, 4), condition=None, device=device)
+uncond_images = representation.decode(uncond_samples).clamp(-1, 1)
+save_image(uncond_images, "outputs/small_run/latent_unet_small.uncond.png", normalize=True, value_range=(-1, 1))
+
+cond_labels = class_labels_to_condition("0,1,2,3", batch_size=4, device=device)
+cond_samples = sampler.sample(
+    model,
+    shape=(4, 4, 4, 4),
+    condition=cond_labels,
+    guidance_scale=float(config.get("sampling", {}).get("guidance_scale", 3.0)),
+    device=device,
+)
+cond_images = representation.decode(cond_samples).clamp(-1, 1)
+save_image(cond_images, "outputs/small_run/latent_unet_small.cond.png", normalize=True, value_range=(-1, 1))
 PY
 ```
 
@@ -174,8 +190,15 @@ CUDA 2:
 ```
 
 It also prepares CIFAR10, downloads the VAE if needed, trains each config, and
-samples the final checkpoint into `outputs/final/`. Logs are written to
-`logs/full_runs/`.
+samples the final checkpoint twice into `outputs/final/`:
+
+```text
+${experiment}.uncond.png
+${experiment}.cond.png
+```
+
+Logs are written to `logs/full_runs/`, including separate conditional and
+unconditional sampling logs.
 
 See `docs/experiment_matrix.md` for the full list of covered components.
 
@@ -183,6 +206,14 @@ Override the physical GPU ids if needed:
 
 ```bash
 GPU_1=0 GPU_2=3 ./scripts/run_all_experiments_cuda_1_2.sh
+```
+
+Override the conditional sampling grid and CFG strength if needed:
+
+```bash
+CFG_CLASS_LABELS=0,1,2,3,4,5,6,7,8,9 \
+CFG_GUIDANCE_SCALE=4.0 \
+./scripts/run_all_experiments_cuda_1_2.sh
 ```
 
 Pixel baselines:
@@ -205,12 +236,21 @@ uv run python -m diffusion.train --config configs/latent_unet_ddim.yaml --device
 uv run python -m diffusion.train --config configs/latent_conv_autoencoder_smoke.yaml --device auto --output-dir runs
 ```
 
-Sample trained checkpoints:
+Sample trained checkpoints unconditionally and conditionally:
 
 ```bash
 uv run python -m diffusion.sample \
   --config configs/latent_unet_ddim.yaml \
   --checkpoint runs/latent_unet_ddim/epoch_0100.pt \
   --device auto \
-  --output outputs/latent_unet_ddim.png
+  --unconditional \
+  --output outputs/latent_unet_ddim.uncond.png
+
+uv run python -m diffusion.sample \
+  --config configs/latent_unet_ddim.yaml \
+  --checkpoint runs/latent_unet_ddim/epoch_0100.pt \
+  --device auto \
+  --class-labels 0,1,2,3,4,5,6,7,8,9 \
+  --guidance-scale 3.0 \
+  --output outputs/latent_unet_ddim.cond.png
 ```

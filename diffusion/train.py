@@ -17,6 +17,7 @@ from .builders import (
     build_schedule,
     load_config,
 )
+from .conditioning import apply_classifier_free_dropout
 from .data import build_cifar10_dataloader
 from .devices import resolve_device
 
@@ -56,7 +57,9 @@ def main() -> None:
     epochs = int(training_cfg.get("epochs", 1))
     log_every = int(training_cfg.get("log_every", 100))
     save_every = int(training_cfg.get("save_every", 1))
-    use_labels = config.get("conditioning", {}).get("type") == "class"
+    conditioning_cfg = config.get("conditioning", {})
+    use_labels = conditioning_cfg.get("type") == "class"
+    condition_dropout = float(conditioning_cfg.get("dropout_prob", 0.0))
 
     step = 0
     model.train()
@@ -64,6 +67,7 @@ def main() -> None:
         for images, labels in dataloader:
             images = images.to(device)
             labels = labels.to(device) if use_labels else None
+            labels = apply_classifier_free_dropout(labels, condition_dropout)
             clean = representation.encode(images)
             loss = loss_fn(model, clean, condition=labels)
             optimizer.zero_grad(set_to_none=True)

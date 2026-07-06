@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import torch
@@ -14,13 +15,18 @@ from diffusion.builders import (
     build_representation,
     build_sampler,
     build_schedule,
+    load_config,
 )
+from diffusion.conditioning import apply_classifier_free_dropout, class_labels_to_condition
 from diffusion.data.cifar10 import (
     HuggingFaceCIFAR10Dataset,
     _canonical_hf_dataset_name,
     build_cifar10_dataloader,
 )
 from diffusion.devices import resolve_device
+from diffusion.models.conditioning import ClassConditionEmbedding
+from diffusion.samplers import _guided_model_output
+from diffusion.sample import _sampling_class_labels
 from diffusion.parameterizations import DiffusionParameterization
 from diffusion.processes import DiffusionProcess
 from diffusion.representations import LatentRepresentation, PixelRepresentation
@@ -34,6 +40,13 @@ class TinyAutoencoder(nn.Module):
 
     def decode(self, latent):
         return latent.repeat(1, 3, 1, 1)
+
+
+class ConditionAwareDenoiser(nn.Module):
+    def forward(self, x_t, timesteps, condition=None):
+        if condition is None:
+            return torch.zeros_like(x_t)
+        return torch.ones_like(x_t)
 
 
 class DiffusionSmokeTests(unittest.TestCase):
@@ -120,6 +133,52 @@ class DiffusionSmokeTests(unittest.TestCase):
         output = model(x_t, timesteps)
         self.assertEqual(output.shape, x_t.shape)
         self.assertTrue(torch.isfinite(output).all())
+
+    def test_class_condition_embedding_supports_null_condition(self):
+        embedding = ClassConditionEmbedding(num_classes=10, embedding_dim=8)
+        condition = torch.tensor([0, -1, 9])
+        output = embedding(condition, batch_size=3, device="cpu")
+        null_output = embedding(None, batch_size=3, device="cpu")
+        self.assertEqual(output.shape, (3, 8))
+        self.assertEqual(null_output.shape, (3, 8))
+
+    def test_class_condition_embedding_rejects_out_of_range_labels(self):
+        embedding = ClassConditionEmbedding(num_classes=10, embedding_dim=8)
+        for bad_label in (-2, 10):
+            with self.subTest(label=bad_label):
+                with self.assertRaises(ValueError):
+                    embedding(torch.tensor([bad_label]), batch_size=1, device="cpu")
+
+    def test_classifier_free_dropout(self):
+        labels = torch.tensor([0, 1, 2, 3])
+        self.assertTrue(torch.equal(apply_classifier_free_dropout(labels, 0.0), labels))
+        dropped = apply_classifier_free_dropout(labels, 1.0)
+        self.assertTrue(torch.equal(dropped, torch.full_like(labels, -1)))
+
+    def test_class_labels_to_condition_repeats_to_batch_size(self):
+        condition = class_labels_to_condition("0,1,2", batch_size=8, device="cpu")
+        self.assertEqual(condition.tolist(), [0, 1, 2, 0, 1, 2, 0, 1])
+
+    def test_guided_model_output_combines_conditional_and_unconditional(self):
+        x_t = torch.randn(2, 1, 4, 4)
+        timesteps = torch.tensor([1, 1])
+        condition = torch.tensor([0, 1])
+        output = _guided_model_output(
+            ConditionAwareDenoiser(),
+            x_t,
+            timesteps,
+            condition=condition,
+            guidance_scale=3.0,
+        )
+        self.assertTrue(torch.equal(output, torch.full_like(x_t, 3.0)))
+        unconditional = _guided_model_output(
+            ConditionAwareDenoiser(),
+            x_t,
+            timesteps,
+            condition=None,
+            guidance_scale=3.0,
+        )
+        self.assertTrue(torch.equal(unconditional, torch.zeros_like(x_t)))
 
     def test_samplers_generate_finite_values_for_all_targets(self):
         for target in ("epsilon", "x0", "v"):
@@ -263,6 +322,49 @@ class DiffusionSmokeTests(unittest.TestCase):
     def test_huggingface_cifar10_alias_uses_namespaced_repo(self):
         self.assertEqual(_canonical_hf_dataset_name("cifar10"), "uoft-cs/cifar10")
         self.assertEqual(_canonical_hf_dataset_name("uoft-cs/cifar10"), "uoft-cs/cifar10")
+
+    def test_sampling_class_labels_from_args_and_config(self):
+        class Args:
+            unconditional = False
+            class_label = None
+            class_labels = "1,2"
+
+        config = {"conditioning": {"type": "class"}, "sampling": {}}
+        condition = _sampling_class_labels(Args(), config, batch_size=5, device=torch.device("cpu"))
+        self.assertEqual(condition.tolist(), [1, 2, 1, 2, 1])
+
+    def test_sampling_unconditional_overrides_config_labels(self):
+        class Args:
+            unconditional = True
+            class_label = None
+            class_labels = None
+
+        config = {
+            "conditioning": {"type": "class"},
+            "sampling": {"class_labels": [0, 1], "guidance_scale": 3.0},
+        }
+        condition = _sampling_class_labels(Args(), config, batch_size=5, device=torch.device("cpu"))
+        self.assertIsNone(condition)
+
+    def test_all_experiment_configs_enable_cfg(self):
+        for path in Path("configs").glob("*.yaml"):
+            with self.subTest(config=str(path)):
+                config = load_config(path)
+                self.assertEqual(config.get("data", {}).get("num_classes"), 10)
+                self.assertEqual(config.get("conditioning", {}).get("type"), "class")
+                self.assertGreater(float(config.get("conditioning", {}).get("dropout_prob", 0.0)), 0.0)
+                self.assertIn("class_labels", config.get("sampling", {}))
+                self.assertIn("guidance_scale", config.get("sampling", {}))
+
+    def test_experiment_configs_are_not_duplicates(self):
+        seen: dict[str, Path] = {}
+        for path in Path("configs").glob("*.yaml"):
+            config = load_config(path)
+            config.pop("experiment_name", None)
+            signature = repr(config)
+            with self.subTest(config=str(path)):
+                self.assertNotIn(signature, seen, f"duplicates {seen.get(signature)}")
+            seen[signature] = path
 
     def test_resolve_device_auto(self):
         self.assertIn(resolve_device("auto").type, {"cpu", "cuda"})

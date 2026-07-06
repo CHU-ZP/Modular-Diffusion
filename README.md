@@ -8,11 +8,13 @@ components:
 - samplers: DDPM, DDIM
 - backbones: MLP, UNet, Transformer, DiT with AdaLN-Zero blocks
 - representations: pixel identity and configurable latent autoencoder wrapper
+- conditioning: CIFAR10 class conditioning with classifier-free guidance
 
 Conceptual write-up:
 
 - [Understanding Diffusion Through This Repository](docs/understanding_diffusion.md)
 - [Experiment Matrix](docs/experiment_matrix.md)
+- [Classifier-Free Guidance](docs/classifier_free_guidance.md)
 
 Run smoke tests:
 
@@ -34,8 +36,14 @@ Train a CIFAR10 baseline:
 uv run python -m diffusion.train --config configs/cifar10_mlp_ddpm.yaml --device auto
 ```
 
-Sample from a checkpoint:
+Sample from a checkpoint unconditionally:
 
 ```bash
-uv run python -m diffusion.sample --config configs/cifar10_mlp_ddpm.yaml --checkpoint runs/cifar10_mlp_ddpm/epoch_0001.pt --output samples.png
+uv run python -m diffusion.sample --config configs/cifar10_mlp_ddpm.yaml --checkpoint runs/cifar10_mlp_ddpm/epoch_0001.pt --unconditional --output samples.uncond.png
+```
+
+Sample the same checkpoint with class guidance:
+
+```bash
+uv run python -m diffusion.sample --config configs/cifar10_mlp_ddpm.yaml --checkpoint runs/cifar10_mlp_ddpm/epoch_0001.pt --class-labels 0,1,2,3,4,5,6,7,8,9 --guidance-scale 3.0 --output samples.cond.png
 ```

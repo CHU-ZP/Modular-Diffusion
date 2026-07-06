@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+from .conditioning import ClassConditionEmbedding
 from .mlp import SinusoidalTimeEmbedding
 
 
@@ -58,7 +59,9 @@ class UNetDenoiser(nn.Module):
             nn.Linear(time_embedding_dim, time_embedding_dim),
         )
         self.class_embedding = (
-            nn.Embedding(num_classes, time_embedding_dim) if num_classes is not None else None
+            ClassConditionEmbedding(num_classes, time_embedding_dim)
+            if num_classes is not None
+            else None
         )
 
         c = base_channels
@@ -81,8 +84,8 @@ class UNetDenoiser(nn.Module):
 
     def forward(self, x_t: Tensor, timesteps: Tensor, condition: Tensor | None = None) -> Tensor:
         time_embedding = self.time_mlp(timesteps)
-        if self.class_embedding is not None and condition is not None:
-            time_embedding = time_embedding + self.class_embedding(condition.long().view(x_t.shape[0]))
+        if self.class_embedding is not None:
+            time_embedding = time_embedding + self.class_embedding(condition, x_t.shape[0], x_t.device)
 
         h0 = self.in_conv(x_t)
         h1 = self.down_block1(h0, time_embedding)

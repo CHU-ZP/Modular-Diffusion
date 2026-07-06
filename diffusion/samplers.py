@@ -16,6 +16,24 @@ def _module_device(module: nn.Module, fallback: torch.device) -> torch.device:
         return fallback
 
 
+def _guided_model_output(
+    denoiser: nn.Module,
+    x_t: Tensor,
+    timesteps: Tensor,
+    condition: Tensor | None = None,
+    guidance_scale: float = 1.0,
+) -> Tensor:
+    if condition is None:
+        return denoiser(x_t, timesteps, None)
+    condition = condition.to(x_t.device)
+    if float(guidance_scale) == 1.0:
+        return denoiser(x_t, timesteps, condition)
+
+    unconditional = denoiser(x_t, timesteps, None)
+    conditional = denoiser(x_t, timesteps, condition)
+    return unconditional + float(guidance_scale) * (conditional - unconditional)
+
+
 class DDPMSampler:
     """Original stochastic DDPM reverse sampler."""
 
@@ -35,6 +53,7 @@ class DDPMSampler:
         denoiser: nn.Module,
         shape: tuple[int, ...],
         condition: Tensor | None = None,
+        guidance_scale: float = 1.0,
         device: torch.device | str | None = None,
         generator: torch.Generator | None = None,
         return_trajectory: bool = False,
@@ -48,7 +67,13 @@ class DDPMSampler:
 
         for step in reversed(range(self.process.schedule.num_timesteps)):
             timesteps = torch.full((shape[0],), step, dtype=torch.long, device=device)
-            model_output = denoiser(x, timesteps, condition)
+            model_output = _guided_model_output(
+                denoiser,
+                x,
+                timesteps,
+                condition,
+                guidance_scale,
+            )
             predicted_x0 = self.parameterization.model_output_to_x0(model_output, x, timesteps)
             if self.clip_x0:
                 predicted_x0 = predicted_x0.clamp(-1.0, 1.0)
@@ -89,6 +114,7 @@ class DDIMSampler:
         denoiser: nn.Module,
         shape: tuple[int, ...],
         condition: Tensor | None = None,
+        guidance_scale: float = 1.0,
         device: torch.device | str | None = None,
         generator: torch.Generator | None = None,
         return_trajectory: bool = False,
@@ -107,7 +133,13 @@ class DDIMSampler:
             next_step = int(timesteps[index + 1].item()) if index + 1 < len(timesteps) else -1
             batch_timesteps = torch.full((shape[0],), step, dtype=torch.long, device=device)
 
-            model_output = denoiser(x, batch_timesteps, condition)
+            model_output = _guided_model_output(
+                denoiser,
+                x,
+                batch_timesteps,
+                condition,
+                guidance_scale,
+            )
             predicted_epsilon = self.parameterization.model_output_to_epsilon(
                 model_output,
                 x,

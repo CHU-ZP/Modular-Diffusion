@@ -7,6 +7,7 @@ from typing import Sequence
 import torch
 from torch import Tensor, nn
 
+from .conditioning import ClassConditionEmbedding
 from .mlp import SinusoidalTimeEmbedding
 
 
@@ -102,7 +103,7 @@ class DiTDenoiser(nn.Module):
             nn.Linear(embed_dim, embed_dim),
         )
         self.class_embedding = (
-            nn.Embedding(num_classes, embed_dim) if num_classes is not None else None
+            ClassConditionEmbedding(num_classes, embed_dim) if num_classes is not None else None
         )
         self.blocks = nn.ModuleList(
             [DiTBlock(embed_dim, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)],
@@ -115,8 +116,8 @@ class DiTDenoiser(nn.Module):
         tokens = tokens + self.position_embedding
 
         context = self.time_embedding(timesteps)
-        if self.class_embedding is not None and condition is not None:
-            context = context + self.class_embedding(condition.long().view(batch_size))
+        if self.class_embedding is not None:
+            context = context + self.class_embedding(condition, batch_size, x_t.device)
 
         for block in self.blocks:
             tokens = block(tokens, context)

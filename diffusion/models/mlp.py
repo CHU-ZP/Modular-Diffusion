@@ -10,6 +10,8 @@ from typing import Sequence
 import torch
 from torch import Tensor, nn
 
+from .conditioning import ClassConditionEmbedding
+
 
 class SinusoidalTimeEmbedding(nn.Module):
     def __init__(self, dim: int, max_period: int = 10_000) -> None:
@@ -54,7 +56,7 @@ class MLPDenoiser(nn.Module):
             nn.SiLU(),
         )
         if num_classes is not None:
-            self.class_embedding = nn.Embedding(num_classes, time_embedding_dim)
+            self.class_embedding = ClassConditionEmbedding(num_classes, time_embedding_dim)
             context_dim = time_embedding_dim
         else:
             self.class_embedding = None
@@ -73,10 +75,7 @@ class MLPDenoiser(nn.Module):
         parts = [x_flat, self.time_embedding(timesteps)]
 
         if self.class_embedding is not None:
-            if condition is None:
-                parts.append(torch.zeros_like(parts[-1]))
-            else:
-                parts.append(self.class_embedding(condition.long().view(batch_size)))
+            parts.append(self.class_embedding(condition, batch_size, x_t.device))
         elif self.condition_dim:
             if condition is None:
                 parts.append(torch.zeros(batch_size, self.condition_dim, device=x_t.device))
