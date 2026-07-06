@@ -1,0 +1,49 @@
+experiment_name: cifar10_unet_x0_ddpm
+
+data:
+  type: cifar10
+  source: huggingface
+  hf_dataset: uoft-cs/cifar10
+  root: ./data
+  image_shape: [3, 32, 32]
+  batch_size: 128
+  train: true
+  download: true
+  num_workers: 4
+
+representation:
+  type: pixel
+
+model:
+  type: unet
+  in_channels: 3
+  base_channels: 64
+  time_embedding_dim: 256
+
+schedule:
+  type: linear
+  num_timesteps: 1000
+  beta_start: 0.0001
+  beta_end: 0.02
+
+diffusion:
+  prediction_target: x0
+
+loss:
+  type: mse
+
+sampler:
+  type: ddpm
+  clip_x0: true
+
+training:
+  epochs: 10
+  log_every: 100
+  save_every: 1
+  optimizer:
+    type: adamw
+    lr: 0.0001
+
+sampling:
+  batch_size: 16
+  shape: [16, 3, 32, 32]

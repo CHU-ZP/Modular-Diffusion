@@ -1,0 +1,60 @@
+experiment_name: latent_conv_autoencoder_smoke
+
+data:
+  type: cifar10
+  source: huggingface
+  hf_dataset: uoft-cs/cifar10
+  root: ./data
+  image_shape: [3, 32, 32]
+  batch_size: 64
+  train: true
+  download: true
+  num_workers: 4
+
+representation:
+  type: latent
+  scaling_factor: 1.0
+  freeze_autoencoder: true
+  autoencoder:
+    type: conv
+    image_channels: 3
+    latent_channels: 4
+    hidden_channels: 32
+    num_res_blocks: 1
+    downsample_factor: 1
+
+model:
+  type: unet
+  in_channels: 4
+  base_channels: 32
+  time_embedding_dim: 128
+
+schedule:
+  type: cosine
+  num_timesteps: 1000
+
+diffusion:
+  prediction_target: v
+
+loss:
+  type: mse
+  weighting: min_snr
+  min_snr_gamma: 5.0
+
+sampler:
+  type: ddim
+  num_steps: 50
+  eta: 0.0
+  clip_x0: false
+
+training:
+  epochs: 1
+  log_every: 100
+  save_every: 1
+  optimizer:
+    type: adamw
+    lr: 0.0001
+
+sampling:
+  batch_size: 16
+  shape: [16, 4, 32, 32]

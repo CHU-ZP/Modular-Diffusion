@@ -14,11 +14,17 @@ VAE_DIR="${VAE_DIR:-checkpoints/vae/sd-vae-ft-mse}"
 
 QUEUE_GPU_1=(
   "configs/cifar10_mlp_ddpm.yaml"
+  "configs/cifar10_transformer_ddpm.yaml"
+  "configs/cifar10_unet_x0_ddpm.yaml"
   "configs/cifar10_unet_cosine.yaml"
+  "configs/latent_conv_autoencoder_smoke.yaml"
 )
 
 QUEUE_GPU_2=(
   "configs/cifar10_unet_ddpm.yaml"
+  "configs/cifar10_dit_ddpm.yaml"
+  "configs/cifar10_unet_sigmoid_ddpm.yaml"
+  "configs/cifar10_unet_snr_cosine.yaml"
   "configs/latent_unet_ddim.yaml"
 )
 

@@ -158,13 +158,26 @@ training process per GPU at a time:
 The script creates two sequential GPU queues:
 
 ```text
-CUDA 1: cifar10_mlp_ddpm -> cifar10_unet_cosine
-CUDA 2: cifar10_unet_ddpm -> latent_unet_ddim
+CUDA 1:
+  cifar10_mlp_ddpm
+  cifar10_transformer_ddpm
+  cifar10_unet_x0_ddpm
+  cifar10_unet_cosine
+  latent_conv_autoencoder_smoke
+
+CUDA 2:
+  cifar10_unet_ddpm
+  cifar10_dit_ddpm
+  cifar10_unet_sigmoid_ddpm
+  cifar10_unet_snr_cosine
+  latent_unet_ddim
 ```
 
 It also prepares CIFAR10, downloads the VAE if needed, trains each config, and
 samples the final checkpoint into `outputs/final/`. Logs are written to
 `logs/full_runs/`.
+
+See `docs/experiment_matrix.md` for the full list of covered components.
 
 Override the physical GPU ids if needed:
 
@@ -177,13 +190,19 @@ Pixel baselines:
 ```bash
 uv run python -m diffusion.train --config configs/cifar10_mlp_ddpm.yaml --device auto --output-dir runs
 uv run python -m diffusion.train --config configs/cifar10_unet_ddpm.yaml --device auto --output-dir runs
+uv run python -m diffusion.train --config configs/cifar10_transformer_ddpm.yaml --device auto --output-dir runs
+uv run python -m diffusion.train --config configs/cifar10_dit_ddpm.yaml --device auto --output-dir runs
+uv run python -m diffusion.train --config configs/cifar10_unet_sigmoid_ddpm.yaml --device auto --output-dir runs
+uv run python -m diffusion.train --config configs/cifar10_unet_x0_ddpm.yaml --device auto --output-dir runs
 uv run python -m diffusion.train --config configs/cifar10_unet_cosine.yaml --device auto --output-dir runs
+uv run python -m diffusion.train --config configs/cifar10_unet_snr_cosine.yaml --device auto --output-dir runs
 ```
 
 Latent baseline:
 
 ```bash
 uv run python -m diffusion.train --config configs/latent_unet_ddim.yaml --device auto --output-dir runs
+uv run python -m diffusion.train --config configs/latent_conv_autoencoder_smoke.yaml --device auto --output-dir runs
 ```
 
 Sample trained checkpoints:

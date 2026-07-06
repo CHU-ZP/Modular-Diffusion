@@ -12,6 +12,7 @@ components:
 Conceptual write-up:
 
 - [Understanding Diffusion Through This Repository](docs/understanding_diffusion.md)
+- [Experiment Matrix](docs/experiment_matrix.md)
 
 Run smoke tests:
 
