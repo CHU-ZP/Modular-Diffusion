@@ -125,6 +125,30 @@ PY
 
 ## 5. Full Runs
 
+To run all configured experiments on physical CUDA devices 1 and 2, with one
+training process per GPU at a time:
+
+```bash
+./scripts/run_all_experiments_cuda_1_2.sh
+```
+
+The script creates two sequential GPU queues:
+
+```text
+CUDA 1: cifar10_mlp_ddpm -> cifar10_unet_cosine
+CUDA 2: cifar10_unet_ddpm -> latent_unet_ddim
+```
+
+It also prepares CIFAR10, downloads the VAE if needed, trains each config, and
+samples the final checkpoint into `outputs/final/`. Logs are written to
+`logs/full_runs/`.
+
+Override the physical GPU ids if needed:
+
+```bash
+GPU_1=0 GPU_2=3 ./scripts/run_all_experiments_cuda_1_2.sh
+```
+
 Pixel baselines:
 
 ```bash
