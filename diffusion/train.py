@@ -32,6 +32,50 @@ def build_dataloader(config: dict) -> torch.utils.data.DataLoader:
     raise ValueError(f"unknown dataset: {dataset}; this repository uses cifar10 only")
 
 
+def checkpoint_payload(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    config: dict,
+    epoch: int,
+    step: int,
+    epoch_train_loss: float,
+    best_train_loss: float,
+) -> dict:
+    return {
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "config": config,
+        "epoch": epoch,
+        "step": step,
+        "epoch_train_loss": float(epoch_train_loss),
+        "best_train_loss": float(best_train_loss),
+    }
+
+
+def save_checkpoint(
+    path: Path,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    config: dict,
+    epoch: int,
+    step: int,
+    epoch_train_loss: float,
+    best_train_loss: float,
+) -> None:
+    torch.save(
+        checkpoint_payload(
+            model,
+            optimizer,
+            config,
+            epoch,
+            step,
+            epoch_train_loss,
+            best_train_loss,
+        ),
+        path,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a diffusion denoiser")
     parser.add_argument("--config", required=True, help="Path to YAML config")
@@ -62,8 +106,11 @@ def main() -> None:
     condition_dropout = float(conditioning_cfg.get("dropout_prob", 0.0))
 
     step = 0
+    best_train_loss = float("inf")
     model.train()
     for epoch in range(1, epochs + 1):
+        epoch_loss_sum = 0.0
+        epoch_batches = 0
         for images, labels in dataloader:
             images = images.to(device)
             labels = labels.to(device) if use_labels else None
@@ -74,21 +121,59 @@ def main() -> None:
             loss.backward()
             optimizer.step()
 
+            loss_value = float(loss.detach().item())
+            epoch_loss_sum += loss_value
+            epoch_batches += 1
             if step % log_every == 0:
-                print(f"epoch={epoch} step={step} loss={loss.item():.6f}")
+                print(f"epoch={epoch} step={step} loss={loss_value:.6f}")
             step += 1
+
+        if epoch_batches == 0:
+            raise RuntimeError("dataloader produced no batches")
+
+        epoch_train_loss = epoch_loss_sum / epoch_batches
+        is_best = epoch_train_loss < best_train_loss
+        if is_best:
+            best_train_loss = epoch_train_loss
+
+        last_path = output_dir / "last.pt"
+        save_checkpoint(
+            last_path,
+            model,
+            optimizer,
+            config,
+            epoch,
+            step,
+            epoch_train_loss,
+            best_train_loss,
+        )
+        print(f"saved {last_path} epoch_train_loss={epoch_train_loss:.6f}")
+
+        if is_best:
+            best_path = output_dir / "best_train_loss.pt"
+            save_checkpoint(
+                best_path,
+                model,
+                optimizer,
+                config,
+                epoch,
+                step,
+                epoch_train_loss,
+                best_train_loss,
+            )
+            print(f"saved {best_path} best_train_loss={best_train_loss:.6f}")
 
         if epoch % save_every == 0:
             checkpoint_path = output_dir / f"epoch_{epoch:04d}.pt"
-            torch.save(
-                {
-                    "model": model.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "config": config,
-                    "epoch": epoch,
-                    "step": step,
-                },
+            save_checkpoint(
                 checkpoint_path,
+                model,
+                optimizer,
+                config,
+                epoch,
+                step,
+                epoch_train_loss,
+                best_train_loss,
             )
             print(f"saved {checkpoint_path}")
 

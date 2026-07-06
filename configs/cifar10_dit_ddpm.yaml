@@ -23,9 +23,9 @@ model:
   type: dit
   input_shape: [3, 32, 32]
   patch_size: 4
-  embed_dim: 256
-  depth: 4
-  num_heads: 4
+  embed_dim: 768
+  depth: 12
+  num_heads: 12
   mlp_ratio: 4.0
 
 schedule:

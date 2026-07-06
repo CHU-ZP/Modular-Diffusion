@@ -6,7 +6,7 @@ components:
 - schedules: linear, cosine, sigmoid
 - prediction targets: epsilon, x0, v
 - samplers: DDPM, DDIM
-- backbones: MLP, UNet, Transformer, DiT with AdaLN-Zero blocks
+- backbones: MLP, UNet, DiT with AdaLN-Zero blocks
 - representations: pixel identity and configurable latent autoencoder wrapper
 - conditioning: CIFAR10 class conditioning with classifier-free guidance
 
@@ -39,11 +39,12 @@ uv run python -m diffusion.train --config configs/cifar10_mlp_ddpm.yaml --device
 Sample from a checkpoint unconditionally:
 
 ```bash
-uv run python -m diffusion.sample --config configs/cifar10_mlp_ddpm.yaml --checkpoint runs/cifar10_mlp_ddpm/epoch_0001.pt --unconditional --output samples.uncond.png
+uv run python -m diffusion.sample --config configs/cifar10_mlp_ddpm.yaml --checkpoint runs/cifar10_mlp_ddpm/best_train_loss.pt --unconditional --output samples.uncond.png
 ```
 
-Sample the same checkpoint with class guidance:
+Sample the same checkpoint with class guidance. The conditional grid includes
+CIFAR10 label captions:
 
 ```bash
-uv run python -m diffusion.sample --config configs/cifar10_mlp_ddpm.yaml --checkpoint runs/cifar10_mlp_ddpm/epoch_0001.pt --class-labels 0,1,2,3,4,5,6,7,8,9 --guidance-scale 3.0 --output samples.cond.png
+uv run python -m diffusion.sample --config configs/cifar10_mlp_ddpm.yaml --checkpoint runs/cifar10_mlp_ddpm/best_train_loss.pt --class-labels 0,1,2,3,4,5,6,7,8,9 --guidance-scale 3.0 --output samples.cond.png
 ```

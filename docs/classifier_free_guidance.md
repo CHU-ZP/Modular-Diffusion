@@ -40,7 +40,7 @@ Unconditional sampling from a CFG-trained checkpoint:
 ```bash
 uv run python -m diffusion.sample \
   --config configs/cifar10_unet_cosine.yaml \
-  --checkpoint runs/cifar10_unet_cosine/epoch_0100.pt \
+  --checkpoint runs/cifar10_unet_cosine/best_train_loss.pt \
   --device cuda \
   --unconditional \
   --output outputs/cfg_unconditional.png
@@ -51,7 +51,7 @@ Class-conditional sampling without extra guidance:
 ```bash
 uv run python -m diffusion.sample \
   --config configs/cifar10_unet_cosine.yaml \
-  --checkpoint runs/cifar10_unet_cosine/epoch_0100.pt \
+  --checkpoint runs/cifar10_unet_cosine/best_train_loss.pt \
   --device cuda \
   --class-label 3 \
   --guidance-scale 1.0 \
@@ -63,7 +63,7 @@ Guided sampling:
 ```bash
 uv run python -m diffusion.sample \
   --config configs/cifar10_unet_cosine.yaml \
-  --checkpoint runs/cifar10_unet_cosine/epoch_0100.pt \
+  --checkpoint runs/cifar10_unet_cosine/best_train_loss.pt \
   --device cuda \
   --class-labels 0,1,2,3,4,5,6,7,8,9 \
   --guidance-scale 3.0 \
@@ -97,7 +97,8 @@ sampling:
   guidance_scale: 3.0
 ```
 
-The full runner samples every final checkpoint twice:
+The full runner samples `best_train_loss.pt` by default for every experiment:
 
 - `${experiment}.uncond.png` uses `--unconditional`;
-- `${experiment}.cond.png` uses `--class-labels` and `--guidance-scale`.
+- `${experiment}.cond.png` uses `--class-labels` and `--guidance-scale`, and
+  includes CIFAR10 label captions under the samples.

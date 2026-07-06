@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Run all full CFG-enabled CIFAR10 experiments on physical CUDA devices 1 and 2.
 # Each GPU runs one queue sequentially, so a single GPU never hosts more than
-# one training process from this script at the same time. Every final checkpoint
-# is sampled once unconditionally and once with class guidance.
+# one training process from this script at the same time. The selected
+# checkpoint is sampled once unconditionally and once with class guidance.
 
 GPU_1="${GPU_1:-1}"
 GPU_2="${GPU_2:-2}"
@@ -14,10 +14,10 @@ SAMPLE_DIR="${SAMPLE_DIR:-outputs/final}"
 VAE_DIR="${VAE_DIR:-checkpoints/vae/sd-vae-ft-mse}"
 CFG_CLASS_LABELS="${CFG_CLASS_LABELS:-0,1,2,3,4,5,6,7,8,9}"
 CFG_GUIDANCE_SCALE="${CFG_GUIDANCE_SCALE:-3.0}"
+CHECKPOINT_NAME="${CHECKPOINT_NAME:-best_train_loss.pt}"
 
 QUEUE_GPU_1=(
   "configs/cifar10_mlp_ddpm.yaml"
-  "configs/cifar10_transformer_ddpm.yaml"
   "configs/cifar10_unet_x0_ddpm.yaml"
   "configs/cifar10_unet_cosine.yaml"
 )
@@ -41,17 +41,20 @@ print(load_config(sys.argv[1]).get("experiment_name", "diffusion"))
 PY
 }
 
-final_checkpoint() {
-  uv run python - "$1" "$2" <<'PY'
+checkpoint_path() {
+  uv run python - "$1" "$2" "${CHECKPOINT_NAME}" <<'PY'
 import sys
 from pathlib import Path
 from diffusion.builders import load_config
 
 config = load_config(sys.argv[1])
 output_dir = Path(sys.argv[2])
+checkpoint_name = sys.argv[3]
 experiment = config.get("experiment_name", "diffusion")
-epochs = int(config.get("training", {}).get("epochs", 1))
-print(output_dir / experiment / f"epoch_{epochs:04d}.pt")
+if checkpoint_name == "final":
+    epochs = int(config.get("training", {}).get("epochs", 1))
+    checkpoint_name = f"epoch_{epochs:04d}.pt"
+print(output_dir / experiment / checkpoint_name)
 PY
 }
 
@@ -85,7 +88,7 @@ train_and_sample() {
   local experiment
   local checkpoint
   experiment="$(experiment_name "${config}")"
-  checkpoint="$(final_checkpoint "${config}" "${OUTPUT_DIR}")"
+  checkpoint="$(checkpoint_path "${config}" "${OUTPUT_DIR}")"
 
   echo "[gpu ${gpu}] training ${experiment}"
   CUDA_VISIBLE_DEVICES="${gpu}" uv run python -m diffusion.train \
@@ -103,7 +106,7 @@ train_and_sample() {
     --output "${SAMPLE_DIR}/${experiment}.uncond.png" \
     2>&1 | tee "${LOG_DIR}/${experiment}.sample.uncond.log"
 
-  echo "[gpu ${gpu}] sampling ${experiment} conditionally from ${checkpoint}"
+  echo "[gpu ${gpu}] sampling ${experiment} conditionally with class labels from ${checkpoint}"
   CUDA_VISIBLE_DEVICES="${gpu}" uv run python -m diffusion.sample \
     --config "${config}" \
     --checkpoint "${checkpoint}" \
@@ -139,3 +142,4 @@ wait "${pid_2}"
 echo "All experiments finished."
 echo "Logs: ${LOG_DIR}"
 echo "Samples: ${SAMPLE_DIR} (*.uncond.png and *.cond.png)"
+echo "Sampled checkpoint: ${CHECKPOINT_NAME}"

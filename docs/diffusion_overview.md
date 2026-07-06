@@ -12,7 +12,9 @@ The code is split along these boundaries:
 - `schedules.py` owns beta, alpha, alpha-bar, and SNR curves.
 - `processes.py` owns `q_sample` and DDPM posterior coefficients.
 - `parameterizations.py` owns epsilon, x0, and v target conversion.
-- `models/` owns denoiser backbones: MLP, UNet, Transformer, and DiT.
+- `models/` owns denoiser backbones: MLP, UNet, Transformer, and DiT. The formal
+  experiment matrix keeps DiT and omits the plain Transformer run to avoid
+  redundant transformer-family experiments.
 - `losses.py` owns training supervision and optional SNR weighting.
 - `samplers.py` owns reverse-time generation with DDPM and DDIM.
 - `representations/` owns the space where diffusion happens: pixels or latents.

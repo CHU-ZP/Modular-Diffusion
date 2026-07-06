@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import torch
@@ -26,12 +27,12 @@ from diffusion.data.cifar10 import (
 from diffusion.devices import resolve_device
 from diffusion.models.conditioning import ClassConditionEmbedding
 from diffusion.samplers import _guided_model_output
-from diffusion.sample import _sampling_class_labels
+from diffusion.sample import _label_text, _sampling_class_labels, save_labeled_image_grid
 from diffusion.parameterizations import DiffusionParameterization
 from diffusion.processes import DiffusionProcess
 from diffusion.representations import LatentRepresentation, PixelRepresentation
 from diffusion.schedules import make_schedule
-from diffusion.train import build_dataloader
+from diffusion.train import build_dataloader, checkpoint_payload, save_checkpoint
 
 
 class TinyAutoencoder(nn.Module):
@@ -287,6 +288,39 @@ class DiffusionSmokeTests(unittest.TestCase):
             num_workers=0,
         )
 
+    def test_training_checkpoint_records_loss_metadata(self):
+        model = nn.Linear(2, 2)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        payload = checkpoint_payload(
+            model,
+            optimizer,
+            {"experiment_name": "unit"},
+            epoch=3,
+            step=12,
+            epoch_train_loss=0.25,
+            best_train_loss=0.2,
+        )
+        self.assertEqual(payload["epoch"], 3)
+        self.assertEqual(payload["step"], 12)
+        self.assertEqual(payload["epoch_train_loss"], 0.25)
+        self.assertEqual(payload["best_train_loss"], 0.2)
+
+        with TemporaryDirectory() as tmpdir:
+            checkpoint_path = Path(tmpdir) / "best_train_loss.pt"
+            save_checkpoint(
+                checkpoint_path,
+                model,
+                optimizer,
+                {"experiment_name": "unit"},
+                epoch=3,
+                step=12,
+                epoch_train_loss=0.25,
+                best_train_loss=0.2,
+            )
+            loaded = torch.load(checkpoint_path, map_location="cpu")
+        self.assertIn("model", loaded)
+        self.assertEqual(loaded["best_train_loss"], 0.2)
+
     def test_huggingface_cifar10_matches_training_interface(self):
         fake_records = [
             {"img": Image.new("RGB", (32, 32), color=(128, 64, 32)), "label": 7},
@@ -345,6 +379,17 @@ class DiffusionSmokeTests(unittest.TestCase):
         }
         condition = _sampling_class_labels(Args(), config, batch_size=5, device=torch.device("cpu"))
         self.assertIsNone(condition)
+
+    def test_labeled_image_grid_adds_class_captions(self):
+        images = torch.zeros(4, 3, 8, 8)
+        labels = torch.tensor([0, 1, 8, 9])
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "grid.png"
+            save_labeled_image_grid(images, labels, output_path, nrow=4)
+            with Image.open(output_path) as image:
+                self.assertGreater(image.width, 4 * 8)
+                self.assertGreater(image.height, 8)
+        self.assertEqual(_label_text(1), "1: automobile")
 
     def test_all_experiment_configs_enable_cfg(self):
         for path in Path("configs").glob("*.yaml"):

@@ -10,7 +10,6 @@ experiments use the full CIFAR10 training split for 100 epochs.
 |---|---|---|---|---|---|---|---|---|
 | `configs/cifar10_mlp_ddpm.yaml` | Pixel | MLP | Linear | epsilon | none | DDPM | CFG class | Simple pixel baseline. |
 | `configs/cifar10_unet_ddpm.yaml` | Pixel | UNet | Linear | epsilon | none | DDPM | CFG class | Main DDPM UNet baseline. |
-| `configs/cifar10_transformer_ddpm.yaml` | Pixel | Transformer | Linear | epsilon | none | DDPM | CFG class | Transformer backbone coverage. |
 | `configs/cifar10_dit_ddpm.yaml` | Pixel | DiT | Linear | epsilon | none | DDPM | CFG class | DiT/AdaLN-Zero backbone coverage. |
 | `configs/cifar10_unet_sigmoid_ddpm.yaml` | Pixel | UNet | Sigmoid | epsilon | none | DDPM | CFG class | Sigmoid schedule coverage. |
 | `configs/cifar10_unet_x0_ddpm.yaml` | Pixel | UNet | Linear | x0 | none | DDPM | CFG class | x0 prediction target coverage. |
@@ -23,10 +22,19 @@ experiments use the full CIFAR10 training split for 100 epochs.
 - Schedules: `linear`, `cosine`, `sigmoid`
 - Prediction targets: `epsilon`, `x0`, `v`
 - Samplers: `DDPM`, `DDIM`
-- Backbones: `MLP`, `UNet`, `Transformer`, `DiT`
+- Backbones: `MLP`, `UNet`, `DiT`
 - Loss weighting: none, `snr`, `min_snr`
 - Representations: pixel, pretrained VAE latent
 - Conditioning: every experiment trains with classifier-free class conditioning
+
+## Model Capacity
+
+The formal configs now use larger networks intended for a strong training
+server:
+
+- MLP: three `2048`-wide hidden layers with `256`-dimensional time/class context.
+- UNet: `base_channels: 192` with `768`-dimensional time/class context.
+- DiT: `embed_dim: 768`, `depth: 12`, `num_heads: 12`.
 
 ## Smoke-Only Config
 
@@ -37,6 +45,6 @@ path works but is not expected to produce meaningful samples. It is not part of
 the full experiment runner. Meaningful latent diffusion results should use
 `latent_unet_ddim.yaml` with the downloaded Diffusers VAE.
 
-The full experiment runner saves two sample grids for every checkpoint:
-unconditional samples with the learned null label and guided class-conditional
-samples with CIFAR10 labels.
+The full experiment runner samples `best_train_loss.pt` by default and saves two
+grids for each experiment: unconditional samples with the learned null label and
+guided class-conditional samples with CIFAR10 label captions.

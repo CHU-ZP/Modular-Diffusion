@@ -176,7 +176,6 @@ The script creates two sequential GPU queues:
 ```text
 CUDA 1:
   cifar10_mlp_ddpm
-  cifar10_transformer_ddpm
   cifar10_unet_x0_ddpm
   cifar10_unet_cosine
 
@@ -189,15 +188,20 @@ CUDA 2:
 ```
 
 It also prepares CIFAR10, downloads the VAE if needed, trains each formal config
-for 100 epochs, and samples the final checkpoint twice into `outputs/final/`:
+for 100 epochs, and samples `best_train_loss.pt` twice into `outputs/final/`:
 
 ```text
 ${experiment}.uncond.png
 ${experiment}.cond.png
 ```
 
-Logs are written to `logs/full_runs/`, including separate conditional and
-unconditional sampling logs.
+The conditional grid includes a CIFAR10 label caption under each generated
+sample. Logs are written to `logs/full_runs/`, including separate conditional
+and unconditional sampling logs.
+
+The runner samples `best_train_loss.pt` by default. Use `CHECKPOINT_NAME=last.pt`
+to sample the latest epoch, or `CHECKPOINT_NAME=final` to sample
+`epoch_0100.pt`.
 
 See `docs/experiment_matrix.md` for the full list of covered components.
 
@@ -220,7 +224,6 @@ Pixel baselines:
 ```bash
 uv run python -m diffusion.train --config configs/cifar10_mlp_ddpm.yaml --device auto --output-dir runs
 uv run python -m diffusion.train --config configs/cifar10_unet_ddpm.yaml --device auto --output-dir runs
-uv run python -m diffusion.train --config configs/cifar10_transformer_ddpm.yaml --device auto --output-dir runs
 uv run python -m diffusion.train --config configs/cifar10_dit_ddpm.yaml --device auto --output-dir runs
 uv run python -m diffusion.train --config configs/cifar10_unet_sigmoid_ddpm.yaml --device auto --output-dir runs
 uv run python -m diffusion.train --config configs/cifar10_unet_x0_ddpm.yaml --device auto --output-dir runs
@@ -245,16 +248,18 @@ Sample trained checkpoints unconditionally and conditionally:
 ```bash
 uv run python -m diffusion.sample \
   --config configs/latent_unet_ddim.yaml \
-  --checkpoint runs/latent_unet_ddim/epoch_0100.pt \
+  --checkpoint runs/latent_unet_ddim/best_train_loss.pt \
   --device auto \
   --unconditional \
   --output outputs/latent_unet_ddim.uncond.png
 
 uv run python -m diffusion.sample \
   --config configs/latent_unet_ddim.yaml \
-  --checkpoint runs/latent_unet_ddim/epoch_0100.pt \
+  --checkpoint runs/latent_unet_ddim/best_train_loss.pt \
   --device auto \
   --class-labels 0,1,2,3,4,5,6,7,8,9 \
   --guidance-scale 3.0 \
   --output outputs/latent_unet_ddim.cond.png
 ```
+
+The conditional sample image includes the class name under each tile.
