@@ -11,8 +11,10 @@ cd /path/to/Diffusion
 uv python install 3.11
 uv venv --python 3.11
 uv sync
-uv pip install --upgrade torch torchvision --torch-backend=auto
 ```
+
+`torch` and `torchvision` are resolved from the `pytorch-cu128` uv index on
+Linux and Windows, as configured in `pyproject.toml`.
 
 Verify that PyTorch sees the intended device:
 

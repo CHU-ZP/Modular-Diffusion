@@ -24,6 +24,8 @@ from .devices import resolve_device
 def build_dataloader(config: dict) -> torch.utils.data.DataLoader:
     data_cfg = dict(config.get("data", {}))
     dataset = data_cfg.pop("type", "cifar10").lower()
+    data_cfg.pop("image_shape", None)
+    data_cfg.pop("num_classes", None)
     if dataset == "cifar10":
         return build_cifar10_dataloader(**data_cfg)
     raise ValueError(f"unknown dataset: {dataset}; this repository uses cifar10 only")

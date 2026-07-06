@@ -19,6 +19,7 @@ from diffusion.parameterizations import DiffusionParameterization
 from diffusion.processes import DiffusionProcess
 from diffusion.representations import LatentRepresentation, PixelRepresentation
 from diffusion.schedules import make_schedule
+from diffusion.train import build_dataloader
 
 
 class TinyAutoencoder(nn.Module):
@@ -198,6 +199,25 @@ class DiffusionSmokeTests(unittest.TestCase):
             torch_dtype="float32",
             local_files_only=True,
             cache_dir=None,
+        )
+
+    def test_build_dataloader_ignores_data_metadata(self):
+        config = {
+            "data": {
+                "type": "cifar10",
+                "root": "./data",
+                "image_shape": [3, 32, 32],
+                "num_classes": 10,
+                "batch_size": 4,
+                "num_workers": 0,
+            },
+        }
+        with patch("diffusion.train.build_cifar10_dataloader") as build_loader:
+            build_dataloader(config)
+        build_loader.assert_called_once_with(
+            root="./data",
+            batch_size=4,
+            num_workers=0,
         )
 
     def test_resolve_device_auto(self):
