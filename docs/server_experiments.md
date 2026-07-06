@@ -48,6 +48,7 @@ CIFAR10 is loaded through Hugging Face `datasets` by default:
 data:
   type: cifar10
   source: huggingface
+  hf_dataset: uoft-cs/cifar10
 ```
 
 The adapter keeps the same training interface as torchvision CIFAR10:

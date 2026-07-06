@@ -17,6 +17,7 @@ from diffusion.builders import (
 )
 from diffusion.data.cifar10 import (
     HuggingFaceCIFAR10Dataset,
+    _canonical_hf_dataset_name,
     build_cifar10_dataloader,
 )
 from diffusion.devices import resolve_device
@@ -258,6 +259,10 @@ class DiffusionSmokeTests(unittest.TestCase):
         self.assertEqual(labels.tolist(), [0, 1])
         self.assertTrue(torch.isclose(images[0].min(), torch.tensor(-1.0)))
         self.assertTrue(torch.isclose(images[1].max(), torch.tensor(1.0)))
+
+    def test_huggingface_cifar10_alias_uses_namespaced_repo(self):
+        self.assertEqual(_canonical_hf_dataset_name("cifar10"), "uoft-cs/cifar10")
+        self.assertEqual(_canonical_hf_dataset_name("uoft-cs/cifar10"), "uoft-cs/cifar10")
 
     def test_resolve_device_auto(self):
         self.assertIn(resolve_device("auto").type, {"cpu", "cuda"})

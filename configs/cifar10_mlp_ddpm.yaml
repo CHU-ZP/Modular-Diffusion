@@ -3,6 +3,7 @@ experiment_name: cifar10_mlp_ddpm
 data:
   type: cifar10
   source: huggingface
+  hf_dataset: uoft-cs/cifar10
   root: ./data
   image_shape: [3, 32, 32]
   batch_size: 128

@@ -21,6 +21,12 @@ def _default_transform() -> transforms.Compose:
     )
 
 
+def _canonical_hf_dataset_name(dataset_name: str) -> str:
+    if dataset_name == "cifar10":
+        return "uoft-cs/cifar10"
+    return dataset_name
+
+
 def _load_huggingface_split(
     dataset_name: str,
     split: str,
@@ -39,7 +45,7 @@ def _load_huggingface_split(
     if not download:
         download_config = DownloadConfig(local_files_only=True)
     return load_dataset(
-        dataset_name,
+        _canonical_hf_dataset_name(dataset_name),
         split=split,
         cache_dir=str(cache_dir),
         download_config=download_config,
@@ -57,7 +63,7 @@ class HuggingFaceCIFAR10Dataset(Dataset[tuple[Tensor, int]]):
         train: bool = True,
         download: bool = True,
         transform: transforms.Compose | None = None,
-        dataset_name: str = "cifar10",
+        dataset_name: str = "uoft-cs/cifar10",
         cache_dir: str | Path | None = None,
     ) -> None:
         split = "train" if train else "test"
@@ -114,7 +120,7 @@ def build_cifar10_dataloader(
     num_workers: int = 2,
     shuffle: bool | None = None,
     source: str = "huggingface",
-    hf_dataset: str = "cifar10",
+    hf_dataset: str = "uoft-cs/cifar10",
     hf_cache_dir: str | None = None,
     pin_memory: bool = True,
 ) -> DataLoader:
