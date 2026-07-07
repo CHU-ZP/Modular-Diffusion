@@ -36,6 +36,9 @@ Train a CIFAR10 baseline:
 uv run python -m diffusion.train --config configs/cifar10_mlp_ddpm.yaml --device auto
 ```
 
+Training checkpoints store EMA denoiser weights under `model_ema`. Sampling from
+a checkpoint always loads `model_ema`.
+
 Sample from a checkpoint unconditionally:
 
 ```bash

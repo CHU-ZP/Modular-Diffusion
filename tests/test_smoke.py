@@ -25,9 +25,15 @@ from diffusion.data.cifar10 import (
     build_cifar10_dataloader,
 )
 from diffusion.devices import resolve_device
+from diffusion.ema import EMAModel
 from diffusion.models.conditioning import ClassConditionEmbedding
 from diffusion.samplers import _guided_model_output
-from diffusion.sample import _label_text, _sampling_class_labels, save_labeled_image_grid
+from diffusion.sample import (
+    _label_text,
+    _sampling_class_labels,
+    checkpoint_ema_state_dict,
+    save_labeled_image_grid,
+)
 from diffusion.parameterizations import DiffusionParameterization
 from diffusion.processes import DiffusionProcess
 from diffusion.representations import LatentRepresentation, PixelRepresentation
@@ -290,10 +296,9 @@ class DiffusionSmokeTests(unittest.TestCase):
 
     def test_training_checkpoint_records_loss_metadata(self):
         model = nn.Linear(2, 2)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+        model_ema = EMAModel(model, decay=0.9)
         payload = checkpoint_payload(
-            model,
-            optimizer,
+            model_ema,
             {"experiment_name": "unit"},
             epoch=3,
             step=12,
@@ -304,13 +309,14 @@ class DiffusionSmokeTests(unittest.TestCase):
         self.assertEqual(payload["step"], 12)
         self.assertEqual(payload["epoch_train_loss"], 0.25)
         self.assertEqual(payload["best_train_loss"], 0.2)
+        self.assertIn("model_ema", payload)
+        self.assertEqual(payload["ema_decay"], 0.9)
 
         with TemporaryDirectory() as tmpdir:
             checkpoint_path = Path(tmpdir) / "best_train_loss.pt"
             save_checkpoint(
                 checkpoint_path,
-                model,
-                optimizer,
+                model_ema,
                 {"experiment_name": "unit"},
                 epoch=3,
                 step=12,
@@ -318,8 +324,31 @@ class DiffusionSmokeTests(unittest.TestCase):
                 best_train_loss=0.2,
             )
             loaded = torch.load(checkpoint_path, map_location="cpu")
-        self.assertIn("model", loaded)
+        self.assertNotIn("model", loaded)
+        self.assertNotIn("optimizer", loaded)
+        self.assertIn("model_ema", loaded)
         self.assertEqual(loaded["best_train_loss"], 0.2)
+
+    def test_ema_model_updates_floating_weights(self):
+        model = nn.Linear(1, 1, bias=False)
+        with torch.no_grad():
+            model.weight.fill_(1.0)
+        model_ema = EMAModel(model, decay=0.5)
+        with torch.no_grad():
+            model.weight.fill_(3.0)
+        model_ema.update(model)
+        ema_weight = model_ema.state_dict()["weight"]
+        self.assertTrue(torch.allclose(ema_weight, torch.tensor([[2.0]])))
+
+    def test_checkpoint_ema_state_dict_requires_ema(self):
+        checkpoint = {
+            "model": {"weight": torch.tensor([1.0])},
+            "model_ema": {"weight": torch.tensor([2.0])},
+        }
+        state_dict = checkpoint_ema_state_dict(checkpoint)
+        self.assertEqual(state_dict["weight"].item(), 2.0)
+        with self.assertRaises(ValueError):
+            checkpoint_ema_state_dict({"model": {"weight": torch.tensor([1.0])}})
 
     def test_huggingface_cifar10_matches_training_interface(self):
         fake_records = [
@@ -400,6 +429,9 @@ class DiffusionSmokeTests(unittest.TestCase):
                 self.assertGreater(float(config.get("conditioning", {}).get("dropout_prob", 0.0)), 0.0)
                 self.assertIn("class_labels", config.get("sampling", {}))
                 self.assertIn("guidance_scale", config.get("sampling", {}))
+                ema_cfg = config.get("training", {}).get("ema", {})
+                self.assertIn("decay", ema_cfg)
+                self.assertNotIn("enabled", ema_cfg)
 
     def test_experiment_configs_are_not_duplicates(self):
         seen: dict[str, Path] = {}

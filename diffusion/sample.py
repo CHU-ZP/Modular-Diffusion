@@ -136,6 +136,17 @@ def save_labeled_image_grid(
     canvas.save(output_path)
 
 
+def checkpoint_ema_state_dict(checkpoint: dict) -> dict:
+    """Return mandatory EMA weights from a training checkpoint."""
+
+    if not isinstance(checkpoint, dict) or "model_ema" not in checkpoint:
+        raise ValueError(
+            "checkpoint must contain model_ema weights. "
+            "Retrain with the current EMA-enabled training code.",
+        )
+    return checkpoint["model_ema"]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sample from a diffusion denoiser")
     parser.add_argument("--config", required=True, help="Path to YAML config")
@@ -172,7 +183,8 @@ def main() -> None:
     model = build_model(config).to(device)
     if args.checkpoint:
         checkpoint = torch.load(args.checkpoint, map_location=device)
-        model.load_state_dict(checkpoint["model"])
+        model.load_state_dict(checkpoint_ema_state_dict(checkpoint))
+        print(f"loaded model_ema from {args.checkpoint}")
     model.eval()
     sampler = build_sampler(config, process, parameterization)
 

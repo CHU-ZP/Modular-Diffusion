@@ -102,3 +102,6 @@ The full runner samples `best_train_loss.pt` by default for every experiment:
 - `${experiment}.uncond.png` uses `--unconditional`;
 - `${experiment}.cond.png` uses `--class-labels` and `--guidance-scale`, and
   includes CIFAR10 label captions under the samples.
+
+Checkpoints include mandatory EMA weights after training. Sampling always loads
+`model_ema`; checkpoints without `model_ema` are rejected.

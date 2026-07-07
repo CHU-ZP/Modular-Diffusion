@@ -110,6 +110,7 @@ from diffusion.builders import (
 )
 from diffusion.conditioning import apply_classifier_free_dropout, class_labels_to_condition
 from diffusion.devices import resolve_device
+from diffusion.ema import EMAModel
 from diffusion.train import build_dataloader
 
 config = load_config("configs/latent_unet_ddim.yaml")
@@ -124,6 +125,7 @@ process = build_process(schedule).to(device)
 parameterization = build_parameterization(config, schedule)
 representation = build_representation(config).to(device)
 model = build_model(config).to(device)
+model_ema = EMAModel(model, decay=float(config.get("training", {}).get("ema", {}).get("decay", 0.9999)))
 loss_fn = build_loss(config, process, parameterization)
 optimizer = build_optimizer(config, model)
 loader = build_dataloader(config)
@@ -137,21 +139,21 @@ for step, (images, labels) in zip(range(5), loader):
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
+    model_ema.update(model)
     print(f"step={step} loss={loss.item():.6f}")
 
 Path("runs/small_run").mkdir(parents=True, exist_ok=True)
 Path("outputs/small_run").mkdir(parents=True, exist_ok=True)
-torch.save({"model": model.state_dict(), "config": config}, "runs/small_run/latent_unet_small.pt")
+torch.save({"model_ema": model_ema.state_dict(), "config": config}, "runs/small_run/latent_unet_small.pt")
 
-model.eval()
 sampler = build_sampler(config, process, parameterization)
-uncond_samples = sampler.sample(model, shape=(4, 4, 4, 4), condition=None, device=device)
+uncond_samples = sampler.sample(model_ema.module, shape=(4, 4, 4, 4), condition=None, device=device)
 uncond_images = representation.decode(uncond_samples).clamp(-1, 1)
 save_image(uncond_images, "outputs/small_run/latent_unet_small.uncond.png", normalize=True, value_range=(-1, 1))
 
 cond_labels = class_labels_to_condition("0,1,2,3", batch_size=4, device=device)
 cond_samples = sampler.sample(
-    model,
+    model_ema.module,
     shape=(4, 4, 4, 4),
     condition=cond_labels,
     guidance_scale=float(config.get("sampling", {}).get("guidance_scale", 3.0)),
@@ -202,6 +204,9 @@ and unconditional sampling logs.
 The runner samples `best_train_loss.pt` by default. Use `CHECKPOINT_NAME=last.pt`
 to sample the latest epoch, or `CHECKPOINT_NAME=final` to sample
 `epoch_0100.pt`.
+
+Training checkpoints contain `model_ema` denoiser weights. Sampling always loads
+`model_ema`; checkpoints without EMA weights are rejected.
 
 See `docs/experiment_matrix.md` for the full list of covered components.
 

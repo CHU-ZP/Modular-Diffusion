@@ -49,6 +49,8 @@ training:
   epochs: 100
   log_every: 100
   save_every: 5
+  ema:
+    decay: 0.9999
   optimizer:
     type: adamw
     lr: 0.0001

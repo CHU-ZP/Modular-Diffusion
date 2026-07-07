@@ -20,6 +20,7 @@ from .builders import (
 from .conditioning import apply_classifier_free_dropout
 from .data import build_cifar10_dataloader
 from .devices import resolve_device
+from .ema import EMAModel
 
 
 def build_dataloader(config: dict) -> torch.utils.data.DataLoader:
@@ -33,8 +34,7 @@ def build_dataloader(config: dict) -> torch.utils.data.DataLoader:
 
 
 def checkpoint_payload(
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
+    model_ema: EMAModel,
     config: dict,
     epoch: int,
     step: int,
@@ -42,20 +42,19 @@ def checkpoint_payload(
     best_train_loss: float,
 ) -> dict:
     return {
-        "model": model.state_dict(),
-        "optimizer": optimizer.state_dict(),
+        "model_ema": model_ema.state_dict(),
         "config": config,
         "epoch": epoch,
         "step": step,
         "epoch_train_loss": float(epoch_train_loss),
         "best_train_loss": float(best_train_loss),
+        "ema_decay": model_ema.decay,
     }
 
 
 def save_checkpoint(
     path: Path,
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
+    model_ema: EMAModel,
     config: dict,
     epoch: int,
     step: int,
@@ -64,8 +63,7 @@ def save_checkpoint(
 ) -> None:
     torch.save(
         checkpoint_payload(
-            model,
-            optimizer,
+            model_ema,
             config,
             epoch,
             step,
@@ -101,12 +99,15 @@ def main() -> None:
     epochs = int(training_cfg.get("epochs", 1))
     log_every = int(training_cfg.get("log_every", 100))
     save_every = int(training_cfg.get("save_every", 1))
+    ema_cfg = training_cfg.get("ema", {})
+    ema_decay = float(ema_cfg.get("decay", 0.9999))
     conditioning_cfg = config.get("conditioning", {})
     use_labels = conditioning_cfg.get("type") == "class"
     condition_dropout = float(conditioning_cfg.get("dropout_prob", 0.0))
 
     step = 0
     best_train_loss = float("inf")
+    model_ema = EMAModel(model, decay=ema_decay)
     model.train()
     for epoch in range(1, epochs + 1):
         epoch_loss_sum = 0.0
@@ -120,6 +121,7 @@ def main() -> None:
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
+            model_ema.update(model)
 
             loss_value = float(loss.detach().item())
             epoch_loss_sum += loss_value
@@ -139,8 +141,7 @@ def main() -> None:
         last_path = output_dir / "last.pt"
         save_checkpoint(
             last_path,
-            model,
-            optimizer,
+            model_ema,
             config,
             epoch,
             step,
@@ -153,8 +154,7 @@ def main() -> None:
             best_path = output_dir / "best_train_loss.pt"
             save_checkpoint(
                 best_path,
-                model,
-                optimizer,
+                model_ema,
                 config,
                 epoch,
                 step,
@@ -167,8 +167,7 @@ def main() -> None:
             checkpoint_path = output_dir / f"epoch_{epoch:04d}.pt"
             save_checkpoint(
                 checkpoint_path,
-                model,
-                optimizer,
+                model_ema,
                 config,
                 epoch,
                 step,
