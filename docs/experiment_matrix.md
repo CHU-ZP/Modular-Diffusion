@@ -26,7 +26,7 @@ experiments use the full CIFAR10 training split for 100 epochs.
 - Loss weighting: none, `snr`, `min_snr`
 - Representations: pixel, pretrained VAE latent
 - Conditioning: every experiment trains with classifier-free class conditioning
-- Checkpointing: every experiment saves mandatory EMA denoiser weights
+- Checkpointing: every experiment saves mandatory warmup EMA denoiser weights
 
 ## Model Capacity
 
@@ -47,6 +47,6 @@ the full experiment runner. Meaningful latent diffusion results should use
 `latent_unet_ddim.yaml` with the downloaded Diffusers VAE.
 
 The full experiment runner samples `best_train_loss.pt` by default and saves two
-grids for each experiment. Sampling always loads EMA weights: unconditional
-samples with the learned null label and guided class-conditional samples with
-CIFAR10 label captions.
+grids for each experiment. Sampling always loads warmup EMA weights:
+unconditional samples with the learned null label and guided class-conditional
+samples with CIFAR10 label captions.

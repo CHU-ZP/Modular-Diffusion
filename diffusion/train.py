@@ -49,6 +49,10 @@ def checkpoint_payload(
         "epoch_train_loss": float(epoch_train_loss),
         "best_train_loss": float(best_train_loss),
         "ema_decay": model_ema.decay,
+        "ema_warmup_steps": model_ema.warmup_steps,
+        "ema_warmup_min_decay": model_ema.warmup_min_decay,
+        "ema_num_updates": model_ema.num_updates,
+        "ema_effective_decay": model_ema.effective_decay,
     }
 
 
@@ -101,13 +105,20 @@ def main() -> None:
     save_every = int(training_cfg.get("save_every", 1))
     ema_cfg = training_cfg.get("ema", {})
     ema_decay = float(ema_cfg.get("decay", 0.9999))
+    ema_warmup_steps = int(ema_cfg.get("warmup_steps", 1000))
+    ema_warmup_min_decay = float(ema_cfg.get("warmup_min_decay", 0.0))
     conditioning_cfg = config.get("conditioning", {})
     use_labels = conditioning_cfg.get("type") == "class"
     condition_dropout = float(conditioning_cfg.get("dropout_prob", 0.0))
 
     step = 0
     best_train_loss = float("inf")
-    model_ema = EMAModel(model, decay=ema_decay)
+    model_ema = EMAModel(
+        model,
+        decay=ema_decay,
+        warmup_steps=ema_warmup_steps,
+        warmup_min_decay=ema_warmup_min_decay,
+    )
     model.train()
     for epoch in range(1, epochs + 1):
         epoch_loss_sum = 0.0
@@ -127,7 +138,10 @@ def main() -> None:
             epoch_loss_sum += loss_value
             epoch_batches += 1
             if step % log_every == 0:
-                print(f"epoch={epoch} step={step} loss={loss_value:.6f}")
+                print(
+                    f"epoch={epoch} step={step} loss={loss_value:.6f} "
+                    f"ema_decay={model_ema.effective_decay:.6f}",
+                )
             step += 1
 
         if epoch_batches == 0:

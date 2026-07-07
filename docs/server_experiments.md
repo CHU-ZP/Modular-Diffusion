@@ -125,7 +125,13 @@ process = build_process(schedule).to(device)
 parameterization = build_parameterization(config, schedule)
 representation = build_representation(config).to(device)
 model = build_model(config).to(device)
-model_ema = EMAModel(model, decay=float(config.get("training", {}).get("ema", {}).get("decay", 0.9999)))
+ema_cfg = config.get("training", {}).get("ema", {})
+model_ema = EMAModel(
+    model,
+    decay=float(ema_cfg.get("decay", 0.9999)),
+    warmup_steps=int(ema_cfg.get("warmup_steps", 1000)),
+    warmup_min_decay=float(ema_cfg.get("warmup_min_decay", 0.0)),
+)
 loss_fn = build_loss(config, process, parameterization)
 optimizer = build_optimizer(config, model)
 loader = build_dataloader(config)
@@ -199,14 +205,15 @@ ${experiment}.cond.png
 
 The conditional grid includes a CIFAR10 label caption under each generated
 sample. Logs are written to `logs/full_runs/`, including separate conditional
-and unconditional sampling logs.
+and unconditional sampling logs. Training log lines include `ema_decay`, so EMA
+warmup can be checked directly with `tail -f`.
 
 The runner samples `best_train_loss.pt` by default. Use `CHECKPOINT_NAME=last.pt`
 to sample the latest epoch, or `CHECKPOINT_NAME=final` to sample
 `epoch_0100.pt`.
 
-Training checkpoints contain `model_ema` denoiser weights. Sampling always loads
-`model_ema`; checkpoints without EMA weights are rejected.
+Training checkpoints contain warmup EMA denoiser weights under `model_ema`.
+Sampling always loads `model_ema`; checkpoints without EMA weights are rejected.
 
 See `docs/experiment_matrix.md` for the full list of covered components.
 

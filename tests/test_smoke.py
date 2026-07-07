@@ -311,6 +311,10 @@ class DiffusionSmokeTests(unittest.TestCase):
         self.assertEqual(payload["best_train_loss"], 0.2)
         self.assertIn("model_ema", payload)
         self.assertEqual(payload["ema_decay"], 0.9)
+        self.assertEqual(payload["ema_warmup_steps"], 0)
+        self.assertEqual(payload["ema_warmup_min_decay"], 0.0)
+        self.assertEqual(payload["ema_num_updates"], 0)
+        self.assertEqual(payload["ema_effective_decay"], 0.9)
 
         with TemporaryDirectory() as tmpdir:
             checkpoint_path = Path(tmpdir) / "best_train_loss.pt"
@@ -328,6 +332,7 @@ class DiffusionSmokeTests(unittest.TestCase):
         self.assertNotIn("optimizer", loaded)
         self.assertIn("model_ema", loaded)
         self.assertEqual(loaded["best_train_loss"], 0.2)
+        self.assertEqual(loaded["ema_decay"], 0.9)
 
     def test_ema_model_updates_floating_weights(self):
         model = nn.Linear(1, 1, bias=False)
@@ -339,6 +344,30 @@ class DiffusionSmokeTests(unittest.TestCase):
         model_ema.update(model)
         ema_weight = model_ema.state_dict()["weight"]
         self.assertTrue(torch.allclose(ema_weight, torch.tensor([[2.0]])))
+
+    def test_ema_model_warms_up_decay(self):
+        model = nn.Linear(1, 1, bias=False)
+        with torch.no_grad():
+            model.weight.fill_(1.0)
+        model_ema = EMAModel(model, decay=0.8, warmup_steps=4, warmup_min_decay=0.0)
+        self.assertEqual(model_ema.num_updates, 0)
+        self.assertEqual(model_ema.effective_decay, 0.0)
+
+        with torch.no_grad():
+            model.weight.fill_(3.0)
+        model_ema.update(model)
+
+        self.assertEqual(model_ema.num_updates, 1)
+        self.assertAlmostEqual(model_ema.effective_decay, 0.2)
+        ema_weight = model_ema.state_dict()["weight"]
+        self.assertTrue(torch.allclose(ema_weight, torch.tensor([[2.6]])))
+
+    def test_ema_model_rejects_invalid_warmup(self):
+        model = nn.Linear(1, 1)
+        with self.assertRaises(ValueError):
+            EMAModel(model, decay=0.8, warmup_steps=-1)
+        with self.assertRaises(ValueError):
+            EMAModel(model, decay=0.8, warmup_min_decay=0.9)
 
     def test_checkpoint_ema_state_dict_requires_ema(self):
         checkpoint = {
@@ -431,6 +460,8 @@ class DiffusionSmokeTests(unittest.TestCase):
                 self.assertIn("guidance_scale", config.get("sampling", {}))
                 ema_cfg = config.get("training", {}).get("ema", {})
                 self.assertIn("decay", ema_cfg)
+                self.assertIn("warmup_steps", ema_cfg)
+                self.assertIn("warmup_min_decay", ema_cfg)
                 self.assertNotIn("enabled", ema_cfg)
 
     def test_experiment_configs_are_not_duplicates(self):
