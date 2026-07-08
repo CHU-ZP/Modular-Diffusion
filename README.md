@@ -169,10 +169,6 @@ The images below are qualitative samples from the completed runs in
 
 <img src="results/cifar10_mlp_ddpm.cond.png" alt="CIFAR10 conditional samples from the failed MLP DDPM experiment" width="520">
 
-The MLP run is kept as a failed case rather than a baseline: flattening CIFAR10
-removes the image locality bias that convolutional and patch-based models rely
-on, and the resulting samples make that limitation visible.
-
 ## Takeaway
 
 The repository keeps the diffusion system modular: the forward process defines

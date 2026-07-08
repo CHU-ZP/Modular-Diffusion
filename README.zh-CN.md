@@ -146,8 +146,7 @@ image -> VAE encoder -> latent -> diffusion -> latent -> VAE decoder -> image
 
 <img src="results/cifar10_mlp_ddpm.cond.png" alt="MLP DDPM 失败实验的 CIFAR10 条件生成结果" width="520">
 
-这组不是 baseline，而是一个保留下来的失败案例：把 CIFAR10 直接 flatten 后交给
-MLP，会丢掉图像里很重要的局部结构先验。结果不好本身就是这个实验想说明的东西。
+把 CIFAR10 直接 flatten 后交给 MLP，会丢掉图像里很重要的局部结构先验。
 
 ## 小结
 
