@@ -240,7 +240,7 @@ trains with CIFAR10 class conditioning plus classifier-free dropout. The same
 checkpoint can therefore be sampled both unconditionally and with class
 guidance. Representative configs include:
 
-- `configs/cifar10_mlp_ddpm.yaml`: pixel-space MLP baseline with linear schedule
+- `configs/cifar10_mlp_ddpm.yaml`: failed pixel-space MLP case with linear schedule
   and DDPM sampling.
 - `configs/cifar10_unet_ddpm.yaml`: pixel-space UNet baseline with linear
   schedule and DDPM sampling.

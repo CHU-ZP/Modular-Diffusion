@@ -8,7 +8,7 @@ experiments use the full CIFAR10 training split for 100 epochs.
 
 | Config | Space | Backbone | Schedule | Target | Loss weighting | Sampler | Conditioning | Purpose |
 |---|---|---|---|---|---|---|---|---|
-| `configs/cifar10_mlp_ddpm.yaml` | Pixel | MLP | Linear | epsilon | none | DDPM | CFG class | Simple pixel baseline. |
+| `configs/cifar10_mlp_ddpm.yaml` | Pixel | MLP | Linear | epsilon | none | DDPM | CFG class | Failed case showing the limits of flattened-image MLP denoising. |
 | `configs/cifar10_unet_ddpm.yaml` | Pixel | UNet | Linear | epsilon | none | DDPM | CFG class | Main DDPM UNet baseline. |
 | `configs/cifar10_dit_ddpm.yaml` | Pixel | DiT | Linear | epsilon | none | DDPM | CFG class | DiT/AdaLN-Zero backbone coverage. |
 | `configs/cifar10_unet_sigmoid_ddpm.yaml` | Pixel | UNet | Sigmoid | epsilon | none | DDPM | CFG class | Sigmoid schedule coverage. |

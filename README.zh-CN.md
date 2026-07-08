@@ -4,53 +4,44 @@
 <a href="README.md">English</a> | 中文
 </p>
 
-这是一个面向理解的扩散模型仓库：用尽量清楚的 PyTorch 模块，把 DDPM、
-DDIM、latent diffusion、classifier-free guidance 这些核心概念串起来。
+这个项目是我对扩散模型的一次模块化整理。目标不是复刻某个大型模型，而是把
+DDPM、DDIM、latent diffusion、CFG 这些概念拆开，放到一套能跑通、能替换、能对照实验的代码里。
 
 ```text
-CIFAR10 图像或 latent 噪声 -> 去噪网络 -> 生成的 CIFAR10 图像
+CIFAR10 图像 / latent 噪声 -> 去噪网络 -> 生成图像
 ```
 
-这个 README 主要解释项目背后的想法、公式和代码实现对应关系，并展示已经跑出的结果。环境配置、数据准备、训练和采样命令放在
+README 只讲思路、公式、代码对应关系和结果。环境配置、数据下载、训练和采样命令放在
 [Documentation](Documentation/README.md)。
 
-## 直觉
+## 基本想法
 
-扩散模型先规定一个固定的加噪过程，把干净样本一步步推向高斯噪声；训练时，网络学习在任意噪声水平下把“该去掉什么”预测出来。真正需要学习的是去噪网络，而不是前向加噪过程。
+扩散模型里，前向加噪过程是不学的。它只是规定：一张干净图像会怎样逐步退化成噪声。真正要训练的是反方向的网络，也就是给定一个带噪样本和时间步，判断应该往哪里去噪。
 
 ```math
 x_t = \sqrt{\bar{\alpha}_t}x_0 + \sqrt{1-\bar{\alpha}_t}\epsilon,
 \quad \epsilon \sim \mathcal{N}(0, I)
 ```
 
-噪声调度决定信号衰减的速度。本仓库实现了 linear、cosine、sigmoid 三种调度，对应代码在
-[`diffusion/schedules.py`](diffusion/schedules.py)。前向加噪和后验系数在
-[`diffusion/processes.py`](diffusion/processes.py)。
+这里的关键量是 `alpha_bar`。它控制还保留多少原始信号，以及混入多少噪声。代码里把这部分单独放在
+[`diffusion/schedules.py`](diffusion/schedules.py) 和
+[`diffusion/processes.py`](diffusion/processes.py)，这样后面换 linear、cosine 或 sigmoid schedule 时，不需要改模型。
 
-## 从图像到噪声
+## 网络到底预测什么
 
-训练时会采样一张干净图像 `x0`、一个时间步 `t` 和一份高斯噪声
-`epsilon`。网络看到的是带噪图像 `x_t` 和时间步，它可以预测三类等价目标：噪声、干净样本，或者 velocity。
-
-```math
-\epsilon\text{-target}: \epsilon_\theta(x_t,t)
-```
+同一个带噪样本 `x_t`，网络可以学不同的目标。最常见的是预测噪声，也可以直接预测干净图像 `x0`，或者预测 velocity。
 
 ```math
-x_0\text{-target}: \hat{x}_{0,\theta}(x_t,t)
+\epsilon_\theta(x_t,t), \quad \hat{x}_{0,\theta}(x_t,t), \quad v_\theta(x_t,t)
 ```
 
-```math
-v\text{-target}: v_\theta(x_t,t)
-```
+这三种目标本质上是同一条前向公式的不同重排。把它们抽成独立模块之后，sampler 就不用关心训练时选的是哪一种目标。
 
-这些目标之间的转换写在
-[`diffusion/parameterizations.py`](diffusion/parameterizations.py)。这样 sampler
-不用关心模型训练时到底预测的是哪一种目标。
+对应实现是 [`diffusion/parameterizations.py`](diffusion/parameterizations.py)。
 
-## 训练到底在学什么
+## 训练在做什么
 
-以最经典的噪声预测为例，训练目标就是让网络预测出当初加进去的那份噪声：
+以噪声预测为例，每一步训练都很直接：拿一张 CIFAR10 图像，随机选一个时间步，加一份高斯噪声，然后让网络把这份噪声预测出来。
 
 ```math
 \mathcal{L}
@@ -58,22 +49,24 @@ v\text{-target}: v_\theta(x_t,t)
 \left\|\epsilon - \epsilon_\theta(x_t,t,c)\right\|^2
 ```
 
-这里的 `c` 是可选类别条件。本仓库使用 CIFAR10 类别做 classifier-free
-guidance：训练时会随机把一部分标签替换成 learned null condition。这样同一个 checkpoint
-既能做无条件生成，也能做类别条件生成，还能调 guidance scale。
+这里的 `c` 是类别条件。训练时会按一定概率把类别标签替换成 null condition，这就是 classifier-free guidance 的训练方式。这样训练完的同一个模型，可以无条件生成，也可以按类别生成，还可以调 guidance scale。
 
-loss 封装在 [`diffusion/losses.py`](diffusion/losses.py)，训练循环在
-[`diffusion/train.py`](diffusion/train.py)。训练保存的是 warmup EMA 后的
-`model_ema` 权重，采样时也强制读取这份权重。
+loss 在 [`diffusion/losses.py`](diffusion/losses.py)，训练入口在
+[`diffusion/train.py`](diffusion/train.py)。checkpoint 里保存的是 warmup EMA 后的
+`model_ema`，采样时也只读取这份权重。
 
-## 怎么生成
+## 采样怎么走回图像
 
-生成从纯高斯噪声开始，sampler 在每个时间步调用去噪网络，把网络预测转化成更低噪声水平的样本。DDPM 是随机反向链，DDIM 则可以用更少步数走一条确定性或近似确定性的轨迹。
+采样时从纯噪声开始，一步步调用网络。网络只负责给出去噪信息，真正决定“怎么走”的是 sampler。
+
+DDPM 会在每一步重新注入随机噪声：
 
 ```math
 x_{t-1} = \mu_\theta(x_t,t) + \sigma_t z,
 \quad z \sim \mathcal{N}(0,I)
 ```
+
+DDIM 则更多地使用网络恢复出的 `x0` 和噪声方向，可以用更少的步数跳着走：
 
 ```math
 x_\tau =
@@ -81,7 +74,7 @@ x_\tau =
 + \sqrt{1-\bar{\alpha}_\tau}\hat{\epsilon}
 ```
 
-有类别条件时，CFG 会把无条件预测和有条件预测组合起来：
+如果使用类别条件，CFG 做的事情也很朴素：同时看一次无条件预测和有条件预测，再把二者的差放大。
 
 ```math
 \mathrm{pred}
@@ -90,34 +83,25 @@ x_\tau =
 - \mathrm{pred}_{\mathrm{uncond}}\right)
 ```
 
-采样器在 [`diffusion/samplers.py`](diffusion/samplers.py)。
+采样器实现都在 [`diffusion/samplers.py`](diffusion/samplers.py)。
 
-## Pixel Diffusion 和 Latent Diffusion
+## Pixel 和 Latent
 
-pixel 实验直接在 `3x32x32` 的 CIFAR10 图像空间里去噪。latent 实验先用预训练
-Diffusers `AutoencoderKL` 把图像压到 latent，再在 latent 空间里做扩散，最后解码回图像。
+pixel diffusion 直接在 CIFAR10 的 `3x32x32` 图像空间里去噪。latent diffusion 多了一层表示变换：先用预训练 VAE 把图像编码成 latent，在 latent 里训练扩散模型，最后再解码回图像。
 
 ```text
-image -> VAE encoder -> latent -> diffusion denoiser -> latent -> VAE decoder -> image
+image -> VAE encoder -> latent -> diffusion -> latent -> VAE decoder -> image
 ```
 
-latent 表示的封装在
-[`diffusion/representations/latent.py`](diffusion/representations/latent.py)，Diffusers
-VAE 适配器在
+这也是我保留 `representation` 这一层抽象的原因。pixel 和 latent 对 diffusion core 来说都是 tensor，只是进入扩散过程之前和离开扩散过程之后的表示不同。
+
+相关代码在
+[`diffusion/representations/latent.py`](diffusion/representations/latent.py) 和
 [`diffusion/models/diffusers_autoencoder.py`](diffusion/models/diffusers_autoencoder.py)。
 
-## 和相关方法的关系
+## 实验覆盖
 
-| 方法 | 学到的对象 | 生成方式 |
-| --- | --- | --- |
-| DDPM | 离散时间步上的噪声或数据预测 | 随机反向马尔可夫链 |
-| DDIM | 和 DDPM 相同的去噪网络 | 可以跳步的确定性或低随机性采样 |
-| Latent diffusion | latent 空间里的去噪模型 | 最终 latent 再解码成图像 |
-| 本仓库 | 可替换的网络、调度、目标和采样器 | CIFAR10 pixel 与 latent 生成 |
-
-## 这个项目实现了什么
-
-正式实验都使用 CIFAR10，并启用 classifier-free class conditioning。配置覆盖了不同的网络、调度、预测目标、loss weighting 和采样器。
+实验没有做成巨大的组合网格，而是挑了几组能说明问题的配置：网络、schedule、预测目标、loss weighting、sampler 都至少有对应的对照。
 
 | 配置 | 空间 | 网络 | 调度 | 目标 | 采样器 |
 | --- | --- | --- | --- | --- | --- |
@@ -130,13 +114,21 @@ VAE 适配器在
 | [`configs/cifar10_unet_snr_cosine.yaml`](configs/cifar10_unet_snr_cosine.yaml) | pixel | UNet | cosine | epsilon | DDIM |
 | [`configs/latent_unet_ddim.yaml`](configs/latent_unet_ddim.yaml) | latent | UNet | cosine | v | DDIM |
 
-模型代码在 [`diffusion/models/`](diffusion/models/)，组件构建逻辑集中在
+模型在 [`diffusion/models/`](diffusion/models/)，配置到组件的构建逻辑在
 [`diffusion/builders.py`](diffusion/builders.py)。
 
-## 结果展示
+## 一点对照
 
-下面的图片来自 [`results/`](results) 中已经跑完的实验。条件生成图会在每个 tile
-下面标出 CIFAR10 类别。
+| 方法 | 学到什么 | 怎么生成 |
+| --- | --- | --- |
+| DDPM | 每个离散时间步上的去噪预测 | 带随机性的反向链 |
+| DDIM | 仍然使用 DDPM 训练出的去噪网络 | 可以跳步，采样更快 |
+| Latent diffusion | latent 空间里的去噪网络 | 最后把 latent 解码成图像 |
+| 这个项目 | 可替换的 schedule、target、model、sampler | 在 CIFAR10 上做 pixel 和 latent 实验 |
+
+## 结果
+
+这些图是 `results/` 里的已完成实验结果。条件生成图下面带有 CIFAR10 类别标签。
 
 ### UNet Cosine DDIM
 
@@ -150,17 +142,24 @@ VAE 适配器在
 
 <img src="results/latent_unet_ddim.cond.png" alt="Latent UNet DDIM 的 CIFAR10 条件生成结果" width="520">
 
-### MLP DDPM Baseline
+### MLP DDPM 失败案例
 
-<img src="results/cifar10_mlp_ddpm.cond.png" alt="MLP DDPM baseline 的 CIFAR10 条件生成结果" width="520">
+<img src="results/cifar10_mlp_ddpm.cond.png" alt="MLP DDPM 失败实验的 CIFAR10 条件生成结果" width="520">
 
-## 总结
+这组不是 baseline，而是一个保留下来的失败案例：把 CIFAR10 直接 flatten 后交给
+MLP，会丢掉图像里很重要的局部结构先验。结果不好本身就是这个实验想说明的东西。
 
-这个仓库的重点不是追求单一最强配置，而是把扩散模型拆成清楚的组件：前向过程定义数据如何变成噪声，网络学习在不同噪声水平下提供去噪信息，采样器决定如何把这些信息一步步转回图像。
+## 小结
+
+我希望这个仓库表达的是一个比较朴素的理解：扩散模型不是一个单块黑盒，而是几件事的配合。
+
+前向过程规定数据如何变成噪声：
 
 ```math
 x_t = a_t x_0 + s_t\epsilon
 ```
+
+网络学习在每个噪声水平下提供去噪信息。sampler 再决定如何利用这些信息，从 `x_T` 走回图像。
 
 ```math
 \mathrm{sample}
