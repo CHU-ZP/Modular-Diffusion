@@ -120,15 +120,6 @@ Latent wrapping is handled by
 the Diffusers VAE adapter is in
 [`diffusion/models/diffusers_autoencoder.py`](diffusion/models/diffusers_autoencoder.py).
 
-## Relation to Nearby Methods
-
-| Method | Learned object | Generation |
-| --- | --- | --- |
-| DDPM | noise or data prediction at discrete timesteps | stochastic reverse Markov chain |
-| DDIM | same denoiser as DDPM | deterministic or lightly stochastic timestep jumps |
-| Latent diffusion | denoising model in VAE latent space | decode the final latent back to pixels |
-| This repository | interchangeable denoisers, schedules, targets, and samplers | CIFAR10 pixel and latent generation |
-
 ## Inside This Demo
 
 The full experiment set uses CIFAR10 with classifier-free class conditioning.
@@ -147,6 +138,15 @@ All formal configs train for 100 epochs and save warmup EMA denoiser weights.
 
 Backbones live in [`diffusion/models/`](diffusion/models/), and component
 construction is centralized in [`diffusion/builders.py`](diffusion/builders.py).
+
+## Relation to Nearby Methods
+
+| Method | Learned object | Generation |
+| --- | --- | --- |
+| DDPM | noise or data prediction at discrete timesteps | stochastic reverse Markov chain |
+| DDIM | same denoiser as DDPM | deterministic or lightly stochastic timestep jumps |
+| Latent diffusion | denoising model in VAE latent space | decode the final latent back to pixels |
+| This repository | interchangeable denoisers, schedules, targets, and samplers | CIFAR10 pixel and latent generation |
 
 ## Results
 
